@@ -1,5 +1,4 @@
 import { PlusIcon } from "@heroicons/react/24/solid";
-
 import "./App.css";
 import { Alert, Button, Dropdown, Input, Table } from "./lib/components";
 
@@ -12,7 +11,7 @@ function App() {
         <PlusIcon className="h-5 w-5 text-center" aria-hidden="true" />
       </div>
       <Alert />
-      <Button />
+      <Button variant="primary" className={"bg-amber-300"}>Tutup</Button>
       <Dropdown />
       <Input />
       <Table />
