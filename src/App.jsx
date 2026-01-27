@@ -1,6 +1,7 @@
 import { PlusIcon } from "@heroicons/react/24/solid";
 
 import "./App.css";
+import { Alert, Button, Dropdown, Input, Table } from "./lib/components";
 
 function App() {
   return (
@@ -10,10 +11,11 @@ function App() {
       <div className="flex justify-center items-center gap-4">
         <PlusIcon className="h-5 w-5 text-center" aria-hidden="true" />
       </div>
-      <p>
-        Edit <code>src/App.jsx</code> and save to test HMR
-      </p>
-      <p className="">Click on the Vite and React logos to learn more</p>
+      <Alert />
+      <Button />
+      <Dropdown />
+      <Input />
+      <Table />
     </>
   );
 }
