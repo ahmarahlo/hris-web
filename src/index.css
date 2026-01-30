@@ -7,6 +7,7 @@
 	--color-brand-400: #bccfde;
 	--color-brand-500: #acc3d5;
 	--color-brand-600: #9bb7cd;
+	--color-brand-650: #8199ab;
 	--color-brand-700: #677a89;
 	--color-brand-800: #4e5c67;
 	--color-brand-900: #343d44;
@@ -59,7 +60,6 @@
 	--color-disable-hover: #dbdbdb;
 	--color-disable-color: #b7b7b7;
 	--color-disbale-pressed: #989898;
-
 }
 
 :root {
@@ -79,42 +79,11 @@
 
 a {
 	font-weight: 500;
-	color: #646cff;
 	text-decoration: inherit;
 }
-a:hover {
-	color: #535bf2;
-}
-
 body {
 	margin: 0;
-	display: flex;
 	place-items: center;
-	min-width: 320px;
-	min-height: 100vh;
-}
-
-h1 {
-	font-size: 3.2em;
-	line-height: 1.1;
-}
-
-button {
-	border-radius: 8px;
-	border: 1px solid transparent;
-	padding: 0.6em 1.2em;
-	font-size: 1em;
-	font-weight: 500;
-	font-family: inherit;
-	cursor: pointer;
-	transition: border-color 0.25s;
-}
-button:hover {
-	border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-	outline: 4px auto -webkit-focus-ring-color;
 }
 
 @media (prefers-color-scheme: light) {
