@@ -1,14 +1,9 @@
 import React from "react";
 import avatar from "../../../assets/avatar.svg";
 
-export function TopBar({ title, user }) {
-	const displayUser = user || {
-		name: "User",
-		role: "UI/UX",
-		avatar: "../../",
-	};
+export function TopBar({}) {
 	return (
-		<header className="flex justify-between items-center w-full border-b-1 border-disable-hover  p-2">
+		<header className="flex justify-between items-center w-full border-b-2 border-disable-hover  p-2">
 				<div className="text-border ml-5">
 					<h1 className="text-3xl"  >Hello, {displayUser.name}</h1>
 					<h2 className="text-xl">{displayUser.role}</h2>
