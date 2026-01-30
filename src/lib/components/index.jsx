@@ -5,3 +5,4 @@ export { Dropdown } from "./dropdown/Dropdown.jsx";
 export { Table } from "./table/Table.jsx";
 export { SideBar } from "./navigation/sidebar.jsx";
 export { TopBar } from "./navigation/topbar.jsx";
+export { Card } from "./card/card.jsx";
