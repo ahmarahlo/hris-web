@@ -9,8 +9,8 @@ export function TopBar({ user }) {
 	};
 
 	return (
-		<header className="flex justify-between items-center w-full border-b-2 border-disable-hover  p-2">
-			<div className="text-border ml-5">
+		<header className="flex justify-between items-center w-full border-b border-gray-200 p-4 bg-white">
+			<div className="text-gray-800 ml-5">
 				<h1 className="text-3xl">Hello, {displayUser.name}</h1>
 				<h2 className="text-xl">{displayUser.role}</h2>
 			</div>

@@ -12,18 +12,20 @@ export function Layout({ children, title, activeMenu }) {
 	};
 
 	return (
-		<div className="min-h-screen bg-[#F5F5F5] font-sans flex">
-			<SideBar activeMenu={activeMenu} />
+		<div className="flex h-screen bg-gray-50 w-full">
+			{/* Sidebar (Fixed width) */}
+			<SideBar />
 
-			<main className="flex-1 ml-64 min-h-screen bg-[#F5F5F5] flex flex-col">
-				<div>
-					<TopBar title={title} user={currentUser} />
-				</div>
+			{/* Main Content Area */}
+			<div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+				{/* TopBar */}
+				<TopBar user={currentUser} />
 
-				<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+				{/* Page Content */}
+				<main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
 					{children}
-				</div>
-			</main>
+				</main>
+			</div>
 		</div>
 	);
 }

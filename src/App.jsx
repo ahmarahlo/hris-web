@@ -1,36 +1,15 @@
 import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Alert, Button, Dropdown, Input, Table } from "./lib/components";
+import { Alert, Button, Card, Dropdown, Input, Table } from "./lib/components";
 import { Layout } from "./lib/components/layout/layout.jsx";
 import "./App.css";
 
 function App() {
 	return (
 		<Layout>
-			<h1 className="text-brand-400">HRIS</h1>
-			<div className="flex justify-center items-center gap-4">
-				<PlusIcon className="h-5 w-5 text-center" aria-hidden="true" />
-			</div>
-			<Alert />
-
-			<Dropdown />
-
-			<Input placeholder="Username" />
-
-			<Input placeholder="Password" />
-
-			<Button
-				variant="primary"
-				onClick={() => {
-					console.log("masuk");
-				}}
-			>
-				Tutup
-				<ClockIcon className="h-5 w-5 text-center gap-4" />
-			</Button>
-
-			<Table />
-
-			<Dropdown />
+			<Card variant="absen_belum" onAction={() => alert('Masuk')}>i</Card>
+			<Card variant="absen_sudah" onAction={() => alert('Masuk')}>i</Card>
+			<Card variant="absen_lengkap" onAction={() => alert('Masuk')}>i</Card>
+			<Card variant="cuti" onAction={() => alert('Masuk')}>i</Card>
 		</Layout>
 	);
 }

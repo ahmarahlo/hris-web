@@ -8,7 +8,7 @@ export function SideBar({ activeMenu }) {
 	];
 
 	return (
-		<aside className="fixed left-0 top-0 h-screen w-64 bg-brand text-white flex flex-col shadow-2xl z-50">
+		<aside className="h-screen w-64 bg-brand text-white flex flex-col shadow-2xl z-50">
 			{/* LOGO SECTION */}
 			<div className="flex text-center items-center justify-center pt-10 pb-8 w-29 mx-auto">
 				<img
