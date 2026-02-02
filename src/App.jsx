@@ -6,10 +6,20 @@ import "./App.css";
 function App() {
 	return (
 		<Layout>
-			<Card variant="absen_belum" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="absen_sudah" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="absen_lengkap" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="cuti" onAction={() => alert('Masuk')}>i</Card>
+			<Alert
+				variant="question"
+				title="Hapus data ini?"
+				// Tombol "Ya, Lanjutkan"
+				onConfirm={() => {
+					console.log("Data Dihapus!");
+					setAlertType(null);
+				}}
+				// Tombol "Batal"
+				onCancel={() => {
+					console.log("Batal hapus.");
+					setAlertType(null);
+				}}
+			/>
 		</Layout>
 	);
 }
