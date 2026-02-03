@@ -2,6 +2,7 @@ import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { Alert, Button, Card, Dropdown, Input, Table } from "./lib/components";
 import { Layout } from "./lib/components/layout/layout.jsx";
 import "./App.css";
+import { AlertBanner } from "./lib/components/alert/alertBanner.jsx";
 
 function App() {
 	return (
@@ -20,6 +21,12 @@ function App() {
 					setAlertType(null);
 				}}
 			/>
+
+			<AlertBanner
+				variant="success"
+				message="APASIH?">
+
+			</AlertBanner>
 		</Layout>
 	);
 }
