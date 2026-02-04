@@ -1,62 +1,96 @@
-import React, { useState } from "react";
-import { Dropdown } from "./lib/components/dropdown/Dropdown"; // Sesuaikan path
-import { FunnelIcon } from "@heroicons/react/24/outline";
-import { Layout } from "./lib/components/layout/layout";
+import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { Alert, Button, Card, Dropdown, Input, Table } from "./lib/components";
+import { Layout } from "./lib/components/layout/layout.jsx";
+import "./App.css";
+import { AlertBanner } from "./lib/components/alert/alertBanner.jsx";
 
 function App() {
-    // --- DATA 1: FILTER (Tanpa warna) ---
-    const filterOptions = [
-        { label: "UI/UX", value: "uiux" },
-        { label: "QA", value: "qa" },
-        { label: "Mobile", value: "mobile" },
-    ];
+	const columns = [
+		{ header: "No", accessor: "no" },
+		{ header: "Tanggal", accessor: "tanggal" },
+		{ header: "Bulan", accessor: "bulan" },
+		{ header: "Durasi kerja", accessor: "durasi" },
+		{ header: "Jam masuk", accessor: "masuk" },
+		{ header: "Jam pulang", accessor: "pulang" },
+	];
 
-    // --- DATA 2: STATUS (Wajib ada properti 'color' karena variant status butuh itu) ---
-    const [currentStatus, setCurrentStatus] = useState({ label: "Pending", color: "bg-yellow-300 text-yellow-900" });
-    
-    const statusOptions = [
-        { label: "Pending", value: "pending", color: "bg-yellow-300 text-yellow-900 hover:bg-yellow-400" },
-        { label: "Approve", value: "approve", color: "bg-green-500 text-white hover:bg-green-600" },
-        { label: "Reject", value: "reject", color: "bg-red-400 text-white hover:bg-red-500" },
-    ];
+	// 2. Dummy Data (Sesuai Isi Gambar)
+	// Nanti ini bisa diganti hasil fetch API
+	const attendanceData = [
+		{
+			no: 1,
+			tanggal: 10,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 2,
+			tanggal: 10,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 3,
+			tanggal: 10,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 4,
+			tanggal: 10,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 5,
+			tanggal: 10,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		// Tambah data lagi biar kelihatan scroll-nya
+		{
+			no: 6,
+			tanggal: 11,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 7,
+			tanggal: 11,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+		{
+			no: 8,
+			tanggal: 11,
+			bulan: 23,
+			durasi: "8 Jam",
+			masuk: "08.00",
+			pulang: "17.00",
+		},
+	];
 
-    return (
-        <Layout>
-            <div className="p-10 space-y-10">
-                
-                {/* CONTOH 1: VARIANT FILTER (Default) */}
-                <div className="flex items-center gap-4">
-                    <span>Filter Data:</span>
-                    <Dropdown 
-                        variant="filter"
-                        options={filterOptions}
-                        onSelect={(item) => console.log("Filter:", item.value)}
-                        trigger={
-                            <button className="p-2 border rounded bg-white hover:bg-gray-50">
-                                <FunnelIcon className="w-5 h-5 text-gray-600" />
-                            </button>
-                        }
-                    />
-                </div>
-
-                {/* CONTOH 2: VARIANT STATUS */}
-                <div className="flex items-center gap-4">
-                    <span>Ubah Status:</span>
-                    <Dropdown 
-                        variant="status" // <--- Cukup ganti ini!
-                        options={statusOptions}
-                        onSelect={(item) => setCurrentStatus(item)}
-                        trigger={
-                            <button className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm ${currentStatus.color}`}>
-                                {currentStatus.label}
-                            </button>
-                        }
-                    />
-                </div>
-
-            </div>
-        </Layout>
-    );
+	return (
+		<Layout>
+			<div className="w-full max-w-4xl">
+				<Table 	columns={columns} data={attendanceData} maxheight="400px" />
+			</div>
+		</Layout>
+	);
 }
 
 export default App;
