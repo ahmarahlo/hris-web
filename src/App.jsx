@@ -1,96 +1,50 @@
+import { useState } from "react"; // <--- 1. IMPORT STATE
 import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Alert, Button, Card, Dropdown, Input, Table } from "./lib/components";
-import { Layout } from "./lib/components/layout/layout.jsx";
+import {
+	Alert,
+	Button,
+	Card,
+	Dropdown,
+	Input,
+	Table,
+	Modal,
+	Layout,
+} from "./lib/components";
 import "./App.css";
-import { AlertBanner } from "./lib/components/alert/alertBanner.jsx";
+import InputModal from "./lib/components/modal/inputModal";
 
 function App() {
-	const columns = [
-		{ header: "No", accessor: "no" },
-		{ header: "Tanggal", accessor: "tanggal" },
-		{ header: "Bulan", accessor: "bulan" },
-		{ header: "Durasi kerja", accessor: "durasi" },
-		{ header: "Jam masuk", accessor: "masuk" },
-		{ header: "Jam pulang", accessor: "pulang" },
-	];
+    // 1. STATE SAKLAR (Default false biar gak kaget pas load)
+    const [isOpen, setIsOpen] = useState(true); 
 
-	// 2. Dummy Data (Sesuai Isi Gambar)
-	// Nanti ini bisa diganti hasil fetch API
-	const attendanceData = [
-		{
-			no: 1,
-			tanggal: 10,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 2,
-			tanggal: 10,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 3,
-			tanggal: 10,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 4,
-			tanggal: 10,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 5,
-			tanggal: 10,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		// Tambah data lagi biar kelihatan scroll-nya
-		{
-			no: 6,
-			tanggal: 11,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 7,
-			tanggal: 11,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-		{
-			no: 8,
-			tanggal: 11,
-			bulan: 23,
-			durasi: "8 Jam",
-			masuk: "08.00",
-			pulang: "17.00",
-		},
-	];
+    // 2. HANDLER TANPA ALERT (Langsung tutup)
+    const handleSubmit = (data) => {
+        console.log("Data dikirim ke Backend:", data);
+        // Di sini panggil API nanti...
+        
+        setIsOpen(false); // Otomatis tutup modal
+    };
 
-	return (
-		<Layout>
-			<div className="w-full max-w-4xl">
-				<Table 	columns={columns} data={attendanceData} maxheight="400px" />
-			</div>
-		</Layout>
-	);
+    return (
+        <Layout>
+             {/* Tombol buat buka lagi kalau ketutup */}
+             <div className="p-10">
+                <button 
+                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                    onClick={() => setIsOpen(true)}
+                >
+                    Tes Buka Modal
+                </button>
+            </div>
+
+            <InputModal
+                isOpen={isOpen}              // <--- JANGAN HARDCODE TRUE
+                onClose={() => setIsOpen(false)} // <--- INI PERBAIKANNYA (Pake setIsOpen)
+                onSubmit={handleSubmit}
+                title="Alasan Pulang Cepat"
+            />
+        </Layout>
+    );
 }
 
 export default App;

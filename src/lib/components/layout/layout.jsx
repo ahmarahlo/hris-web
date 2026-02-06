@@ -1,6 +1,6 @@
 import React from "react";
-import { SideBar } from "../navigation/sidebar.jsx";
-import { TopBar } from "../navigation/topbar.jsx";
+import { SideBar } from "../navigation/SideBar.jsx";
+import { TopBar } from "../navigation/TopBar.jsx";
 
 export function Layout({ children, title, activeMenu }) {
 	// Simulasi data user yang login (Nanti ambil dari database/session)
