@@ -1,50 +1,99 @@
-import { useState } from "react"; // <--- 1. IMPORT STATE
-import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
-import {
-	Alert,
-	Button,
-	Card,
-	Dropdown,
-	Input,
-	Table,
-	Modal,
-	Layout,
-} from "./lib/components";
+import { useState } from "react";
+import { PencilIcon } from "@heroicons/react/24/solid";
+import { Table, Badge, Layout } from "./lib/components";
 import "./App.css";
-import InputModal from "./lib/components/modal/inputModal";
 
 function App() {
-    // 1. STATE SAKLAR (Default false biar gak kaget pas load)
-    const [isOpen, setIsOpen] = useState(true); 
+	// Data sample sesuai gambar
+	const cutiData = [
+		{
+			no: 1,
+			nama: "Reno",
+			tanggal: 3,
+			alasan: "Sakit",
+			catatan: "",
+			status: "approve",
+			lastUser: "Admin09",
+		},
+		{
+			no: 2,
+			nama: "Reno",
+			tanggal: 3,
+			alasan: "Sakit",
+			catatan: "",
+			status: "pending",
+			lastUser: "Admin09",
+		},
+		{
+			no: 3,
+			nama: "Reno",
+			tanggal: 3,
+			alasan: "Sakit",
+			catatan: "",
+			status: "approve",
+			lastUser: "Admin09",
+		},
+		{
+			no: 4,
+			nama: "Reno",
+			tanggal: 3,
+			alasan: "Sakit",
+			catatan: "",
+			status: "reject",
+			lastUser: "Admin09",
+		},
+		{
+			no: 5,
+			nama: "Farid",
+			tanggal: 3,
+			alasan: "Sakit",
+			catatan: "",
+			status: "approve",
+			lastUser: "Admin09",
+		},
+	];
 
-    // 2. HANDLER TANPA ALERT (Langsung tutup)
-    const handleSubmit = (data) => {
-        console.log("Data dikirim ke Backend:", data);
-        // Di sini panggil API nanti...
-        
-        setIsOpen(false); // Otomatis tutup modal
-    };
+	const columns = [
+		{ header: "No", accessor: "no" },
+		{ header: "Nama karyawan", accessor: "nama" },
+		{ header: "Tanggal cuti", accessor: "tanggal" },
+		{ header: "Alasan", accessor: "alasan" },
+		{
+			header: "Catatan HR",
+			accessor: "catatan",
+			render: (row) => row.catatan || "-",
+		},
+		{
+			header: "Status",
+			accessor: "status",
+			render: (row) => (
+				<Badge variant={row.status}>
+					{row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+				</Badge>
+			),
+		},
+		{ header: "Last user", accessor: "lastUser" },
+		{
+			header: "Action",
+			accessor: "action",
+			render: () => (
+				<button className="p-2 text-brand-600 hover:text-brand-800 hover:bg-brand-100 rounded-lg transition-colors">
+					<PencilIcon className="h-5 w-5" />
+				</button>
+			),
+		},
+	];
 
-    return (
-        <Layout>
-             {/* Tombol buat buka lagi kalau ketutup */}
-             <div className="p-10">
-                <button 
-                    className="bg-blue-500 text-white px-4 py-2 rounded"
-                    onClick={() => setIsOpen(true)}
-                >
-                    Tes Buka Modal
-                </button>
-            </div>
-
-            <InputModal
-                isOpen={isOpen}              // <--- JANGAN HARDCODE TRUE
-                onClose={() => setIsOpen(false)} // <--- INI PERBAIKANNYA (Pake setIsOpen)
-                onSubmit={handleSubmit}
-                title="Alasan Pulang Cepat"
-            />
-        </Layout>
-    );
+	return (
+		<Layout>
+			<div className="p-6">
+				<h1 className="text-2xl font-bold text-gray-800 mb-6">
+					Manajemen Cuti Karyawan
+				</h1>
+				<Table columns={columns} data={cutiData} />
+			</div>
+		</Layout>
+	);
 }
 
 export default App;

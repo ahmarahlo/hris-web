@@ -8,3 +8,4 @@ export { TopBar } from "./navigation/TopBar.jsx";
 export { Card } from "./card/Card.jsx";
 export { Modal } from "./modal/Modal.jsx";
 export { Layout } from "./layout/layout.jsx";
+export { Badge } from "./badge/badge.jsx";
