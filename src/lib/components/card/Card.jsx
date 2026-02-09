@@ -148,6 +148,7 @@ export function Card({
 									</button>
 								</div>
 							) : (
+								// Tombol Aktif menggunakan Komponen Button Kamu
 								<Button
 									variant={style.btnVariant}
 									onClick={onAction}
