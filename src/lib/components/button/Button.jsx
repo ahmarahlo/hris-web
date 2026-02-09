@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Button() {
-  return <p>Button</p>;
+	// TODO: Implement Button component
+	return null;
 }

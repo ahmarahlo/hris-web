@@ -1,23 +1,34 @@
-import { PlusIcon } from "@heroicons/react/24/solid";
-
+import { ClockIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { Alert, Button, Card, Dropdown, Input, Table } from "./lib/components";
+import { Layout } from "./lib/components/layout/layout.jsx";
 import "./App.css";
-import { Alert, Button, Dropdown, Input, Table } from "./lib/components";
+import { AlertBanner } from "./lib/components/alert/alertBanner.jsx";
 
 function App() {
-  return (
-    <>
-      <div></div>
-      <h1 className="text-brand-400">HRIS</h1>
-      <div className="flex justify-center items-center gap-4">
-        <PlusIcon className="h-5 w-5 text-center" aria-hidden="true" />
-      </div>
-      <Alert />
-      <Button />
-      <Dropdown />
-      <Input />
-      <Table />
-    </>
-  );
+	return (
+		<Layout>
+			<Alert
+				variant="question"
+				title="Hapus data ini?"
+				// Tombol "Ya, Lanjutkan"
+				onConfirm={() => {
+					console.log("Data Dihapus!");
+					setAlertType(null);
+				}}
+				// Tombol "Batal"
+				onCancel={() => {
+					console.log("Batal hapus.");
+					setAlertType(null);
+				}}
+			/>
+
+			<AlertBanner
+				variant="success"
+				message="APASIH?">
+
+			</AlertBanner>
+		</Layout>
+	);
 }
 
 export default App;
