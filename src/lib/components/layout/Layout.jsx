@@ -1,6 +1,6 @@
 import React from "react";
 
 export function Layout() {
-	// TODO: Implement Layout component
+	// TODO: Implement Alert component
 	return null;
 }
