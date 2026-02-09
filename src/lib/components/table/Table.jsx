@@ -1,6 +1,6 @@
 import React from "react";
 
 export function Table() {
-	// TODO: Implement Table component
-	return null;
+  // TODO: Implement Table component
+  return null;
 }

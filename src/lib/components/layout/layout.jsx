@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Alert() {
+export function Layout() {
 	// TODO: Implement Alert component
 	return null;
 }
