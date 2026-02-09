@@ -1,4 +1,3 @@
-import React from "react";
 import { CheckIcon, XMarkIcon, ClockIcon } from "@heroicons/react/24/solid";
 
 export function Badge({

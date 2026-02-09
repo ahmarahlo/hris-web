@@ -1,4 +1,3 @@
-import React from "react";
 import avatar from "../../../assets/avatar.svg";
 
 export function TopBar({ user }) {

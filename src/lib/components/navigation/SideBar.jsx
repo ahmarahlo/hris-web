@@ -1,4 +1,3 @@
-import React from "react";
 import LogoHris from "../../../assets/logo.svg";
 
 export function SideBar({ activeMenu }) {
