@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Table() {
-  return <p>Table</p>;
+	// TODO: Implement Table component
+	return null;
 }

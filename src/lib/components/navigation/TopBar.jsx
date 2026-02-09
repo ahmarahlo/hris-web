@@ -1,3 +1,6 @@
+import React from "react";
+
 export function TopBar() {
-	return <p>TopBar</p>;
+	// TODO: Implement TopBar component
+	return null;
 }

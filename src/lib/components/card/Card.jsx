@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Card() {
-	return <p>Card</p>;
+	// TODO: Implement Card component
+	return null;
 }

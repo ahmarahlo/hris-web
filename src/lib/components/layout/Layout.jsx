@@ -1,3 +1,6 @@
-export function Layout({ children }) {
-	return <div>{children}</div>;
+import React from "react";
+
+export function Layout() {
+	// TODO: Implement Layout component
+	return null;
 }

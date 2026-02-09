@@ -1,3 +1,6 @@
+import React from "react";
+
 export function SideBar() {
-	return <p>SideBar</p>;
+	// TODO: Implement SideBar component
+	return null;
 }
