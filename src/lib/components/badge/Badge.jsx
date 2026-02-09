@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Badge() {
-  return <p>Badge</p>;
+	// TODO: Implement Badge component
+	return null;
 }

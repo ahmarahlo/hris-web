@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Input() {
-  return <p>Input</p>;
+	// TODO: Implement Input component
+	return null;
 }

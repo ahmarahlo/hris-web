@@ -1,3 +1,6 @@
+import React from "react";
+
 export function Modal() {
-  return <p>Modal</p>;
+	// TODO: Implement Modal component
+	return null;
 }

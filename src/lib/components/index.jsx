@@ -5,4 +5,7 @@ export { Dropdown } from "./dropdown/Dropdown.jsx";
 export { Table } from "./table/Table.jsx";
 export { SideBar } from "./navigation/SideBar.jsx";
 export { TopBar } from "./navigation/TopBar.jsx";
-export { Card } from "./card/card.jsx";
+export { Card } from "./card/Card.jsx";
+export { Modal } from "./modal/Modal.jsx";
+export { Layout } from "./layout/Layout.jsx";
+export { Badge } from "./badge/Badge.jsx";
