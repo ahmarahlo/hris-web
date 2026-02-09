@@ -6,10 +6,18 @@ import "./App.css";
 function App() {
 	return (
 		<Layout>
-			<Card variant="absen_belum" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="absen_sudah" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="absen_lengkap" onAction={() => alert('Masuk')}>i</Card>
-			<Card variant="cuti" onAction={() => alert('Masuk')}>i</Card>
+			<Card variant="absen_belum" onAction={() => alert("Masuk")}>
+				i
+			</Card>
+			<Card variant="absen_sudah" onAction={() => alert("Masuk")}>
+				i
+			</Card>
+			<Card variant="absen_lengkap" onAction={() => alert("Masuk")}>
+				i
+			</Card>
+			<Card variant="cuti" onAction={() => alert("Masuk")}>
+				i
+			</Card>
 		</Layout>
 	);
 }
