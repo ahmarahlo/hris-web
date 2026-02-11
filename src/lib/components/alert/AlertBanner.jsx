@@ -1,89 +1,32 @@
-import { Button } from "../button/Button";
-import dismissGif from "../../../assets/dismiss.gif";
-import successGif from "../../../assets/success.gif";
-import questionGif from "../../../assets/question.gif";
-
-const BASE_STYLES =
-  "flex flex-col items-center bg-white p-8 rounded-3xl shadow-xl w-full max-w-md mx-auto text-center border border-gray-100";
-
-const ALERT_VARIANTS = {
-  success: {
-    img: successGif,
-    defaultTitle: "Berhasil!",
-    defaultBtnText: "Selesai",
-    btnVariant: "primary",
-  },
-  error: {
-    img: dismissGif,
-    defaultTitle: "Gagal",
-    defaultBtnText: "Tutup",
-    btnVariant: "danger",
-  },
-  question: {
-    img: questionGif,
-    defaultTitle: "Apakah anda yakin?",
-    defaultBtnText: "Ya, Lanjutkan",
-    defaultCancelText: "Batal",
-    btnVariant: "primary",
-  },
+const BANNER_VARIANTS = {
+	success: {
+		bgColor: "bg-success-100",
+		textColor: "text-success-900",
+	},
+	error: {
+		bgColor: "bg-danger/50",
+		textColor: "text-danger",
+	},
+	info: {
+		bgColor: "bg-info-100",
+		textColor: "text-info-900",
+	},
 };
 
-export function Alert({
-  variant = "error",
-  title,
-  buttonText,
-  onClose,
-  onConfirm,
-  onCancel,
-  cancelText,
-  className = "",
-  ...props
+export function AlertBanner({
+	variant = "error",
+	message,
+	className = "",
+	...props
 }) {
-  const config = ALERT_VARIANTS[variant] || ALERT_VARIANTS.error;
+	const config = BANNER_VARIANTS[variant] || BANNER_VARIANTS.error;
 
-  return (
-    <div className={`${BASE_STYLES} ${className}`} {...props}>
-      <div className="mb-6">
-        <img
-          src={config.img}
-          alt={`Status ${variant}`}
-          className="h-24 w-24 object-contain"
-        />
-      </div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-8">
-        {title || config.defaultTitle}
-      </h2>
-      <div className="w-full">
-        {/* LOGIC SPLIT BUTTON */}
-        {variant === "question" ? (
-          // 1. Jika Question: Render 2 Tombol
-          <div className="flex gap-3 w-full">
-            <Button
-              variant="ghost" // Pastikan variant ghost ada di Button.jsx
-              onClick={onCancel}
-              className="flex-1 justify-center border border-gray-200"
-            >
-              {cancelText || config.defaultCancelText}
-            </Button>
-            <Button
-              variant={config.btnVariant}
-              onClick={onConfirm}
-              className="flex-1 justify-center"
-            >
-              {buttonText || config.defaultBtnText}
-            </Button>
-          </div>
-        ) : (
-          // 2. Jika Lainnya: Render 1 Tombol
-          <Button
-            variant={config.btnVariant}
-            onClick={onClose}
-            className="w-full justify-center"
-          >
-            {buttonText || config.defaultBtnText}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
+	return (
+		<div
+			className={`w-full max-w-lg p-2 rounded-xl ${config.bgColor} ${className}`}
+			{...props}
+		>
+			<p className={`text-sm font-sm ${config.textColor}`}>{message}</p>
+		</div>
+	);
 }
