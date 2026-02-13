@@ -22,10 +22,8 @@ export function Layout({ children, title, activeMenu }) {
 		<div className="min-h-screen bg-brand font-sans flex">
 			<SideBar activeMenu={activeMenu} />
 
-			<main className="flex-1 ml-64 min-h-screen bg-white flex flex-col">
-				<div>
-					<TopBar title={title} user={currentUser} />
-				</div>
+			<main className="flex-1 ml-80 min-h-screen bg-white flex flex-col">
+				<TopBar title={title} user={currentUser} />
 
 				<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 					{children}

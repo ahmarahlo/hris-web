@@ -5,6 +5,8 @@ export function Input({
 	value,
 	onChange,
 	name,
+	error,
+	className = "",
 	...props
 }) {
 	return (
@@ -19,8 +21,15 @@ export function Input({
 				onChange={onChange}
 				name={name}
 				{...props}
-				className="w-full bg-white text-gray-900 placeholder-gray-400 transition-all duration-300 ease-out px-4 py-3 border border-gray-300 rounded-xl outline-none hover:border-gray-400 focus:border-info focus:ring-1 focus:ring-info"
+				className={`w-full bg-white text-black placeholder-gray-400 transition-all duration-300 ease-out px-4 py-3 border rounded-xl outline-none 
+          ${
+						error
+							? "border-danger focus:ring-danger-100 focus:border-danger"
+							: "border-gray-300 hover:border-gray-400 focus:border-info focus:ring-1 focus:ring-info"
+					} 
+          ${className}`}
 			></input>
+			{error && <p className="text-xs text-danger">{error}</p>}
 		</div>
 	);
 }

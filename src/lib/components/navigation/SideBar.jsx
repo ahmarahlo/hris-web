@@ -6,17 +6,11 @@ import {
 	UsersIcon,
 	ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/solid";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../AuthContext";
 
 export function SideBar({ activeMenu }) {
-	const { user, logout } = useAuth();
-	const navigate = useNavigate();
-
-	const handleLogout = () => {
-		logout();
-		navigate("/login");
-	};
+	const { user } = useAuth();
 
 	// Define menus based on role
 	let menus = [];
@@ -24,8 +18,21 @@ export function SideBar({ activeMenu }) {
 	if (user?.role === "hr") {
 		menus = [
 			{ name: "Beranda", href: "/admin", icon: HomeIcon },
-			{ name: "Manajemen Karyawan", href: "/admin/karyawan", icon: UsersIcon },
-			{ name: "Manajemen Cuti", href: "/admin/cuti", icon: DocumentTextIcon },
+			{
+				name: "Manajemen absensi",
+				href: "/admin/absensi",
+				icon: UserGroupIcon,
+			},
+			{
+				name: "Manajemen cuti",
+				href: "/admin/cuti",
+				icon: DocumentTextIcon,
+			},
+			{
+				name: "Manajemen akun",
+				href: "/admin/akun",
+				icon: UsersIcon,
+			},
 		];
 	} else {
 		// Default to employee
@@ -36,7 +43,7 @@ export function SideBar({ activeMenu }) {
 	}
 
 	return (
-		<aside className="fixed left-0 top-0 h-screen w-64 bg-brand text-white flex flex-col shadow-2xl z-50">
+		<aside className="fixed left-0 top-0 h-screen w-80 bg-brand text-white flex flex-col shadow-xl z-50">
 			{/* LOGO SECTION */}
 			<div className="flex text-center items-center justify-center pt-10 pb-8 w-29 mx-auto">
 				<img
@@ -72,17 +79,6 @@ export function SideBar({ activeMenu }) {
 					);
 				})}
 			</nav>
-
-			{/* LOGOUT BUTTON */}
-			<div className="p-4 mb-4">
-				<button
-					onClick={handleLogout}
-					className="flex items-center gap-3 px-6 py-3 w-full text-lg font-medium text-white opacity-90 hover:opacity-100 hover:bg-brand-650 hover:font-bold rounded-lg transition-all"
-				>
-					<ArrowLeftOnRectangleIcon className="w-5 h-5" />
-					Logout
-				</button>
-			</div>
 		</aside>
 	);
 }

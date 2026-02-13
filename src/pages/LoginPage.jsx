@@ -46,7 +46,7 @@ export default function LoginPage() {
 
 			// Redirect based on role
 			if (data.role === "hr") {
-				navigate("/dashboard"); // Sementara ke dashboard dulu, nanti ke /admin jika sudah ada
+				navigate("/admin");
 			} else {
 				navigate("/dashboard");
 			}

@@ -1,130 +1,81 @@
 const EMPLOYEE_API_URL = "http://109.111.53.197:7090";
 const BACKOFFICE_API_URL = "http://109.111.53.197:7091";
-
-const API_KEY = "INIKEYAPI"; // Masukkan API Key di sini (hubungi backend dev jika tidak ada)
-
-const getBaseUrl = (isBackoffice = false) => {
-	return isBackoffice ? BACKOFFICE_API_URL : EMPLOYEE_API_URL;
-};
-
-const getAuthToken = () => {
-	return localStorage.getItem("token");
-};
-
-export const fetchWithAuth = async (
-	endpoint,
-	options = {},
-	isBackoffice = false,
-) => {
-	const token = getAuthToken();
-	const headers = {
-		"Content-Type": "application/json",
-		"x-api-key": API_KEY, // Add API Key
-		...options.headers,
-	};
-
-	if (token) {
-		headers["Authorization"] = `Bearer ${token}`;
-	}
-
-	const url = `${getBaseUrl(isBackoffice)}${endpoint}`;
-
-	const response = await fetch(url, {
-		...options,
-		headers,
-	});
-
-	if (response.status === 401) {
-		// Optional: Handle unauthorized (e.g., redirect to login if not already there)
-		// For now, we'll let the caller handle it or AuthContext can handle logout
-	}
-
-	return response;
-};
+const API_KEY = "INIKEYAPI";
 
 export const api = {
 	login: async (email, password) => {
-		// Try employee login first
-		let response = await fetch(`${EMPLOYEE_API_URL}/login`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": API_KEY,
-			},
-			body: JSON.stringify({ email, password }),
-		});
-
-		if (response.ok) {
-			return response.json();
-		}
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(errorData.message || "Email atau password salah");
-		}
-
-		return response.json();
+		const role = email.includes("hr") ? "hr" : "employee";
+		const user = {
+			id: 1,
+			name: "Test User",
+			email: email,
+			role: role,
+			token: "access-token",
+		};
+		return user;
 	},
 
-	// User Data
 	getMe: async () => {
-		const response = await fetchWithAuth("/users/me");
-		if (!response.ok) throw new Error("Failed to fetch user");
-		return response.json();
+		return {
+			id: 1,
+			name: "Test User",
+			divisi: "UI/UX",
+			leaveBalance: 12,
+		};
 	},
 
 	// Attendance
 	getAttendanceToday: async () => {
-		const response = await fetchWithAuth("/attendance/today");
-		if (!response.ok) throw new Error("Failed to fetch attendance today");
-		return response.json();
+		const todayStr = new Date().toISOString().split("T")[0];
+		const stored = localStorage.getItem(`attendance_${todayStr}`);
+		return stored ? JSON.parse(stored) : null;
 	},
 
 	clockIn: async (time) => {
-		const response = await fetchWithAuth("/attendance/clock-in", {
-			method: "POST",
-			body: JSON.stringify({ time }),
-		});
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(errorData.message || "Failed to clock in");
-		}
-		return response.json();
+		const todayStr = new Date().toISOString().split("T")[0];
+		const data = {
+			date: todayStr,
+			clockIn: time,
+			clockOut: null,
+		};
+		localStorage.setItem(`attendance_${todayStr}`, JSON.stringify(data));
+		return data;
 	},
 
-	clockOut: async (time) => {
-		const response = await fetchWithAuth("/attendance/clock-out", {
-			method: "POST",
-			body: JSON.stringify({ time }),
-		});
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(errorData.message || "Failed to clock out");
+	clockOut: async (time, reason = null) => {
+		const todayStr = new Date().toISOString().split("T")[0];
+		const stored = localStorage.getItem(`attendance_${todayStr}`);
+		if (stored) {
+			const data = JSON.parse(stored);
+			data.clockOut = time;
+			if (reason) data.reason = reason;
+			localStorage.setItem(`attendance_${todayStr}`, JSON.stringify(data));
+			return data;
 		}
-		return response.json();
+		throw new Error("Belum Clock In hari ini!");
 	},
 
 	getAttendanceHistory: async () => {
-		const response = await fetchWithAuth("/attendance");
-		if (!response.ok) throw new Error("Failed to fetch attendance history");
-		return response.json();
+		const localHistory = [];
+		for (let i = 0; i < localStorage.length; i++) {
+			const key = localStorage.key(i);
+			if (key.startsWith("attendance_")) {
+				const item = JSON.parse(localStorage.getItem(key));
+				localHistory.push(item);
+			}
+		}
+
+		localHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+		return localHistory;
 	},
 
 	// Leaves
 	getLeaves: async () => {
-		const response = await fetchWithAuth("/leaves");
-		if (!response.ok) throw new Error("Failed to fetch leaves");
-		return response.json();
+		return [];
 	},
 
 	createLeave: async (data) => {
-		const response = await fetchWithAuth("/leaves", {
-			method: "POST",
-			body: JSON.stringify(data),
-		});
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(errorData.message || "Failed to create leave request");
-		}
-		return response.json();
+		return { message: "Success" };
 	},
 };

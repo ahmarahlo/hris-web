@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Layout, Card, Table, Badge } from "../lib/components";
+import { Layout, Card, Table, Badge, Modal, Alert } from "../lib/components";
 import { FunnelIcon } from "@heroicons/react/24/solid";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
@@ -37,9 +37,12 @@ export default function DashboardPage() {
 		leaves: [],
 		attendanceHistory: [],
 		leaveBalance: 0,
-		totalLeaves: 0, // Total cuti tahunan (hardcoded 12 for now or derived?)
+		totalLeaves: 0,
 	});
 	const [loading, setLoading] = useState(true);
+	const [isEarlyLeaveModalOpen, setIsEarlyLeaveModalOpen] = useState(false);
+	const [pendingClockOutTime, setPendingClockOutTime] = useState(null);
+	const [earlyClockOutReason, setEarlyClockOutReason] = useState("");
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -51,13 +54,6 @@ export default function DashboardPage() {
 						api.getAttendanceHistory().catch(() => []),
 						api.getLeaves().catch(() => []),
 					]);
-
-				// Hitung total pengajuan cuti tahun ini (approved?)
-				// API leaves returns all requests.
-				// Assuming "totalCuti" means "Cuti diambil" or "Jatah Cuti"?
-				// Design says "Total pengajuan cuti tahun ini" and "Cuti tersisa".
-				// Let's assume user.leaveBalance is remaining.
-				// Total taken = 12 - remaining? Or just count from history.
 
 				setStats({
 					attendanceToday,
@@ -76,46 +72,125 @@ export default function DashboardPage() {
 		fetchData();
 	}, []);
 
+	// Helper untuk hitung durasi
+	const calculateDuration = (startTime, endTime) => {
+		if (!startTime || !endTime) return "-";
+
+		// Parse "HH:mm:ss" or "HH:mm"
+		// Asumsi format timeString dari API konsisten, tapi kita handle basic
+		const [startHour, startMinute] = startTime.split(":").map(Number);
+		const [endHour, endMinute] = endTime.split(":").map(Number);
+
+		let durationHour = endHour - startHour;
+		let durationMinute = endMinute - startMinute;
+
+		if (durationMinute < 0) {
+			durationHour -= 1;
+			durationMinute += 60;
+		}
+
+		return `${durationHour} Jam ${durationMinute > 0 ? `${durationMinute} Menit` : ""}`;
+	};
+
+	// Helper untuk mendapatkan format jam:menit dari Date object
+	const getHHMM = (date) => {
+		return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+	};
+
 	const handleClockIn = async () => {
 		try {
 			const now = new Date();
-			const timeString = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-			await api.clockIn(timeString);
+			const defaultTime = getHHMM(now);
+
+			const customTime = window.prompt(
+				"Masukkan jam Clock In (HH:mm)",
+				defaultTime,
+			);
+			if (!customTime) return; // Cancelled
+
+			await api.clockIn(customTime);
 			// Refresh data
 			const updatedToday = await api.getAttendanceToday();
-			setStats((prev) => ({ ...prev, attendanceToday: updatedToday }));
+			const updatedHistory = await api.getAttendanceHistory(); // Refresh history juga biar tabel update
+			setStats((prev) => ({
+				...prev,
+				attendanceToday: updatedToday,
+				attendanceHistory: updatedHistory,
+			}));
 		} catch (error) {
 			alert(error.message);
 		}
 	};
 
 	const handleClockOut = async () => {
+		const now = new Date();
+		const defaultTime = getHHMM(now);
+
+		const customTime = window.prompt(
+			"Masukkan jam Clock Out (HH:mm)",
+			defaultTime,
+		);
+		if (!customTime) return; // Cancelled
+
+		const [hour] = customTime.split(":").map(Number);
+
+		// Logic validasi pulang cepat (< 17:00) - Gunakan threshold normal 17:00
+		// Untuk testing sekarang, anggap jam < 19:00 = pulang cepat
+		if (hour < 19) {
+			setPendingClockOutTime(customTime);
+			setIsEarlyLeaveModalOpen(true);
+			return;
+		}
+
+		// Jika tidak pulang cepat, langsung clock out
+		await processClockOut(customTime);
+	};
+
+	const processClockOut = async (time, reason = null) => {
 		try {
-			const now = new Date();
-			const timeString = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
-			await api.clockOut(timeString);
+			await api.clockOut(time, reason);
 			// Refresh data
 			const updatedToday = await api.getAttendanceToday();
-			setStats((prev) => ({ ...prev, attendanceToday: updatedToday }));
+			const updatedHistory = await api.getAttendanceHistory();
+			setStats((prev) => ({
+				...prev,
+				attendanceToday: updatedToday,
+				attendanceHistory: updatedHistory,
+			}));
 		} catch (error) {
 			alert(error.message);
 		}
 	};
 
+	const confirmEarlyClockOut = async () => {
+		if (pendingClockOutTime) {
+			await processClockOut(pendingClockOutTime, earlyClockOutReason);
+			setIsEarlyLeaveModalOpen(false);
+			setPendingClockOutTime(null);
+			setEarlyClockOutReason("");
+		}
+	};
+
 	// --- Data Transformation for Tables ---
 
-	const absensiData = stats.attendanceHistory
-		.slice(0, 5)
-		.map((item, index) => ({
+	// --- Data Transformation for Tables ---
+
+	const absensiData = stats.attendanceHistory.map((item, index) => {
+		// Logic Telat: Jika jam masuk > 08:00
+		const isLate = item.clockIn > "08:00";
+
+		return {
 			no: index + 1,
 			tanggal: formatDate(item.date),
 			bulan: formatMonth(item.date),
-			durasi: item.clockOut ? "8 Jam" : "-", // Hitung durasi real later
+			durasi: item.clockOut
+				? calculateDuration(item.clockIn, item.clockOut)
+				: "-", // Pakai fungsi yang sudah ada
 			clockIn: formatTime(item.clockIn),
 			clockOut: formatTime(item.clockOut),
-			clockInColor: true, // Styling logic
-			clockOutColor: !!item.clockOut,
-		}));
+			isLate: isLate, // Flag untuk styling
+		};
+	});
 
 	const cutiData = stats.leaves.slice(0, 5).map((item, index) => ({
 		no: index + 1,
@@ -134,12 +209,16 @@ export default function DashboardPage() {
 		{ header: "Bulan", accessor: "bulan" },
 		{ header: "Durasi kerja", accessor: "durasi" },
 		{
-			header: "Clock In",
+			header: "Jam Masuk",
 			accessor: "clockIn",
-			render: (row) => <span className="text-success-600">{row.clockIn}</span>,
+			render: (row) => (
+				<span className={row.isLate ? "text-danger" : "text-success-600"}>
+					{row.clockIn}
+				</span>
+			),
 		},
 		{
-			header: "Clock Out",
+			header: "Jam Pulang",
 			accessor: "clockOut",
 			render: (row) => <span className="text-info">{row.clockOut}</span>,
 		},
@@ -195,7 +274,14 @@ export default function DashboardPage() {
 								variant={cardVariant}
 								jamMasuk={formatTime(stats.attendanceToday?.clockIn)}
 								jamPulang={formatTime(stats.attendanceToday?.clockOut)}
-								durasi="-"
+								durasi={
+									stats.attendanceToday?.clockOut
+										? calculateDuration(
+												formatTime(stats.attendanceToday?.clockIn),
+												formatTime(stats.attendanceToday?.clockOut),
+											)
+										: "-"
+								}
 								onAction={
 									cardVariant === "absen_belum" ? handleClockIn : handleClockOut
 								}
@@ -204,7 +290,7 @@ export default function DashboardPage() {
 								variant="cuti"
 								totalCuti={stats.totalLeaves} // Total diajukan
 								sisaCuti={stats.leaveBalance}
-										onAction={() => {
+								onAction={() => {
 									/* Navigate/Open Modal */
 								}}
 							/>
@@ -229,6 +315,40 @@ export default function DashboardPage() {
 							</div>
 							<Table columns={cutiColumns} data={cutiData} />
 						</div>
+
+						<Modal
+							isOpen={isEarlyLeaveModalOpen}
+							onClose={() => setIsEarlyLeaveModalOpen(false)}
+							title="Konfirmasi Pulang Cepat"
+						>
+							<div className="flex flex-col items-center w-full">
+								<p className="text-center text-gray-500 mt-2 text-sm mb-4">
+									Anda pulang sebelum jam 17:00. Durasi kerja anda akan tercatat
+									kurang dari 8 jam.
+									<br />
+									Silakan isi alasan kepulangan anda.
+								</p>
+
+								<textarea
+									className="w-full border border-gray-300 rounded-lg p-2 mb-4 text-sm focus:outline-none focus:border-brand text-black"
+									placeholder="Alasan pulang cepat..."
+									rows={3}
+									value={earlyClockOutReason}
+									onChange={(e) => setEarlyClockOutReason(e.target.value)}
+								/>
+
+								<Alert
+									variant="question"
+									title="Pulang Lebih Cepat?"
+									buttonText="Ya, Pulang"
+									cancelText="Batal"
+									onConfirm={confirmEarlyClockOut}
+									onCancel={() => setIsEarlyLeaveModalOpen(false)}
+									shadow={false}
+									className="border-0 p-0 w-full"
+								/>
+							</div>
+						</Modal>
 					</>
 				)}
 			</div>

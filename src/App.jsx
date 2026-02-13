@@ -2,6 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import CutiPage from "./pages/CutiPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import ManajemenAbsensiPage from "./pages/admin/ManajemenAbsensiPage";
+import ManajemenCutiPage from "./pages/admin/ManajemenCutiPage";
+import ManajemenAkunPage from "./pages/admin/ManajemenAkunPage";
 import PrivateRoute from "./lib/components/PrivateRoute";
 import "./App.css";
 
@@ -17,10 +21,13 @@ function App() {
 					<Route path="/cuti" element={<CutiPage />} />
 				</Route>
 
-				{/* HR Routes - Future */}
-				{/* <Route element={<PrivateRoute allowedRoles={['hr']} />}>
-                    <Route path="/admin" element={<AdminDashboardPage />} />
-                </Route> */}
+				{/* HR Routes */}
+				<Route element={<PrivateRoute allowedRoles={["hr"]} />}>
+					<Route path="/admin" element={<AdminDashboardPage />} />
+					<Route path="/admin/absensi" element={<ManajemenAbsensiPage />} />
+					<Route path="/admin/cuti" element={<ManajemenCutiPage />} />
+					<Route path="/admin/akun" element={<ManajemenAkunPage />} />
+				</Route>
 
 				<Route path="*" element={<Navigate to="/login" replace />} />
 			</Routes>

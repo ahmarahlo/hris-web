@@ -7,6 +7,8 @@ export { Table } from "./table/Table.jsx";
 export { SideBar } from "./navigation/SideBar.jsx";
 export { TopBar } from "./navigation/TopBar.jsx";
 export { Card } from "./card/Card.jsx";
+export { StatsCard } from "./card/StatsCard.jsx";
 export { Modal } from "./modal/Modal.jsx";
+export { InputModal } from "./modal/InputModal.jsx";
 export { Layout } from "./layout/Layout.jsx";
 export { Badge } from "./badge/Badge.jsx";
