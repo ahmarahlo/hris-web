@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { Layout, Card, Table, Badge, Modal, Alert } from "../lib/components";
-import { FunnelIcon } from "@heroicons/react/24/solid";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 
-// Helper untuk format tanggal/waktu
+// --- Helper: Format tanggal/waktu ---
+
 const formatDate = (dateString) => {
 	if (!dateString) return "-";
 	const date = new Date(dateString);
@@ -19,8 +21,6 @@ const formatMonth = (dateString) => {
 
 const formatTime = (timeString) => {
 	if (!timeString) return "-";
-	// Asumsi format dari API bisa "HH:mm:ss" atau ISO
-	// Jika ISO, ambil jam:menit
 	if (timeString.includes("T")) {
 		const date = new Date(timeString);
 		return date
@@ -32,6 +32,7 @@ const formatTime = (timeString) => {
 
 export default function DashboardPage() {
 	const { user } = useAuth();
+	const navigate = useNavigate();
 	const [stats, setStats] = useState({
 		attendanceToday: null,
 		leaves: [],
@@ -40,9 +41,12 @@ export default function DashboardPage() {
 		totalLeaves: 0,
 	});
 	const [loading, setLoading] = useState(true);
-	const [isEarlyLeaveModalOpen, setIsEarlyLeaveModalOpen] = useState(false);
+
+	// Clock Out flow: null | "confirm" | "reason" | "loading" | "success"
+	const [clockOutStep, setClockOutStep] = useState(null);
 	const [pendingClockOutTime, setPendingClockOutTime] = useState(null);
 	const [earlyClockOutReason, setEarlyClockOutReason] = useState("");
+	const [errorAlert, setErrorAlert] = useState(null);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -72,12 +76,9 @@ export default function DashboardPage() {
 		fetchData();
 	}, []);
 
-	// Helper untuk hitung durasi
 	const calculateDuration = (startTime, endTime) => {
 		if (!startTime || !endTime) return "-";
 
-		// Parse "HH:mm:ss" or "HH:mm"
-		// Asumsi format timeString dari API konsisten, tapi kita handle basic
 		const [startHour, startMinute] = startTime.split(":").map(Number);
 		const [endHour, endMinute] = endTime.split(":").map(Number);
 
@@ -92,7 +93,6 @@ export default function DashboardPage() {
 		return `${durationHour} Jam ${durationMinute > 0 ? `${durationMinute} Menit` : ""}`;
 	};
 
-	// Helper untuk mendapatkan format jam:menit dari Date object
 	const getHHMM = (date) => {
 		return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 	};
@@ -106,50 +106,10 @@ export default function DashboardPage() {
 				"Masukkan jam Clock In (HH:mm)",
 				defaultTime,
 			);
-			if (!customTime) return; // Cancelled
+			if (!customTime) return;
 
 			await api.clockIn(customTime);
-			// Refresh data
-			const updatedToday = await api.getAttendanceToday();
-			const updatedHistory = await api.getAttendanceHistory(); // Refresh history juga biar tabel update
-			setStats((prev) => ({
-				...prev,
-				attendanceToday: updatedToday,
-				attendanceHistory: updatedHistory,
-			}));
-		} catch (error) {
-			alert(error.message);
-		}
-	};
 
-	const handleClockOut = async () => {
-		const now = new Date();
-		const defaultTime = getHHMM(now);
-
-		const customTime = window.prompt(
-			"Masukkan jam Clock Out (HH:mm)",
-			defaultTime,
-		);
-		if (!customTime) return; // Cancelled
-
-		const [hour] = customTime.split(":").map(Number);
-
-		// Logic validasi pulang cepat (< 17:00) - Gunakan threshold normal 17:00
-		// Untuk testing sekarang, anggap jam < 19:00 = pulang cepat
-		if (hour < 19) {
-			setPendingClockOutTime(customTime);
-			setIsEarlyLeaveModalOpen(true);
-			return;
-		}
-
-		// Jika tidak pulang cepat, langsung clock out
-		await processClockOut(customTime);
-	};
-
-	const processClockOut = async (time, reason = null) => {
-		try {
-			await api.clockOut(time, reason);
-			// Refresh data
 			const updatedToday = await api.getAttendanceToday();
 			const updatedHistory = await api.getAttendanceHistory();
 			setStats((prev) => ({
@@ -158,25 +118,66 @@ export default function DashboardPage() {
 				attendanceHistory: updatedHistory,
 			}));
 		} catch (error) {
-			alert(error.message);
+			setErrorAlert(error.message || "Gagal melakukan clock in");
 		}
 	};
 
-	const confirmEarlyClockOut = async () => {
-		if (pendingClockOutTime) {
-			await processClockOut(pendingClockOutTime, earlyClockOutReason);
-			setIsEarlyLeaveModalOpen(false);
-			setPendingClockOutTime(null);
-			setEarlyClockOutReason("");
+	// --- Clock Out Flow ---
+
+	const handleClockOut = () => {
+		const now = new Date();
+		const time = getHHMM(now);
+		setPendingClockOutTime(time);
+
+		const [hour] = time.split(":").map(Number);
+
+		if (hour < 17) {
+			setClockOutStep("confirm");
+		} else {
+			executeClockOut(time, null);
 		}
 	};
 
-	// --- Data Transformation for Tables ---
+	const handleConfirmEarly = () => {
+		setClockOutStep("reason");
+	};
+
+	const handleSubmitReason = async () => {
+		setClockOutStep("loading");
+		await executeClockOut(pendingClockOutTime, earlyClockOutReason);
+	};
+
+	const executeClockOut = async (time, reason) => {
+		try {
+			setClockOutStep("loading");
+			await api.clockOut(time, reason);
+
+			const updatedToday = await api.getAttendanceToday();
+			const updatedHistory = await api.getAttendanceHistory();
+			setStats((prev) => ({
+				...prev,
+				attendanceToday: updatedToday,
+				attendanceHistory: updatedHistory,
+			}));
+
+			setClockOutStep("success");
+			setTimeout(() => resetClockOutFlow(), 2000);
+		} catch (error) {
+			console.error("Clock out error:", error);
+			setClockOutStep(null);
+			setErrorAlert(error.message || "Gagal melakukan clock out");
+		}
+	};
+
+	const resetClockOutFlow = () => {
+		setClockOutStep(null);
+		setPendingClockOutTime(null);
+		setEarlyClockOutReason("");
+	};
 
 	// --- Data Transformation for Tables ---
 
 	const absensiData = stats.attendanceHistory.map((item, index) => {
-		// Logic Telat: Jika jam masuk > 08:00
 		const isLate = item.clockIn > "08:00";
 
 		return {
@@ -185,10 +186,10 @@ export default function DashboardPage() {
 			bulan: formatMonth(item.date),
 			durasi: item.clockOut
 				? calculateDuration(item.clockIn, item.clockOut)
-				: "-", // Pakai fungsi yang sudah ada
+				: "-",
 			clockIn: formatTime(item.clockIn),
 			clockOut: formatTime(item.clockOut),
-			isLate: isLate, // Flag untuk styling
+			isLate,
 		};
 	});
 
@@ -203,6 +204,7 @@ export default function DashboardPage() {
 	}));
 
 	// --- Columns Definition ---
+
 	const absensiColumns = [
 		{ header: "No", accessor: "no" },
 		{ header: "Tanggal", accessor: "tanggal" },
@@ -245,10 +247,6 @@ export default function DashboardPage() {
 	];
 
 	// --- Card Variant Logic ---
-	// absen_belum: jika attendanceToday null atau clockIn null
-	// absen_sudah: jika clockIn ada tapi clockOut belum
-	// absen_lengkap: jika clockIn dan clockOut ada
-
 	let cardVariant = "absen_belum";
 	if (stats.attendanceToday) {
 		if (stats.attendanceToday.clockIn && !stats.attendanceToday.clockOut) {
@@ -268,7 +266,7 @@ export default function DashboardPage() {
 					<div>Loading dashboard data...</div>
 				) : (
 					<>
-						{/* Cards Section */}
+						{/* Cards */}
 						<div className="flex gap-6 flex-col lg:flex-row">
 							<Card
 								variant={cardVariant}
@@ -285,14 +283,17 @@ export default function DashboardPage() {
 								onAction={
 									cardVariant === "absen_belum" ? handleClockIn : handleClockOut
 								}
+								tanggal={new Date().toLocaleDateString("id-ID", {
+									day: "numeric",
+									month: "long",
+									year: "numeric",
+								})}
 							/>
 							<Card
 								variant="cuti"
-								totalCuti={stats.totalLeaves} // Total diajukan
+								totalCuti={stats.totalLeaves}
 								sisaCuti={stats.leaveBalance}
-								onAction={() => {
-									/* Navigate/Open Modal */
-								}}
+								onAction={() => navigate("/cuti")}
 							/>
 						</div>
 
@@ -306,7 +307,7 @@ export default function DashboardPage() {
 							<Table columns={absensiColumns} data={absensiData} />
 						</div>
 
-						{/* Riwayat Cuti Bulan Ini */}
+						{/* Riwayat Cuti */}
 						<div>
 							<div className="flex items-center justify-between mb-4">
 								<h2 className="text-xl font-bold text-brand-900">
@@ -316,42 +317,116 @@ export default function DashboardPage() {
 							<Table columns={cutiColumns} data={cutiData} />
 						</div>
 
+						{/* Clock Out Step 1: Konfirmasi pulang cepat */}
 						<Modal
-							isOpen={isEarlyLeaveModalOpen}
-							onClose={() => setIsEarlyLeaveModalOpen(false)}
-							title="Konfirmasi Pulang Cepat"
+							isOpen={clockOutStep === "confirm"}
+							onClose={resetClockOutFlow}
 						>
-							<div className="flex flex-col items-center w-full">
-								<p className="text-center text-gray-500 mt-2 text-sm mb-4">
-									Anda pulang sebelum jam 17:00. Durasi kerja anda akan tercatat
-									kurang dari 8 jam.
-									<br />
-									Silakan isi alasan kepulangan anda.
-								</p>
+							<Alert
+								variant="question"
+								title="Pulang Lebih Cepat?"
+								buttonText="Ya, Pulang"
+								cancelText="Batal"
+								onConfirm={handleConfirmEarly}
+								onCancel={resetClockOutFlow}
+								shadow={false}
+								className="border-0 p-0 w-full"
+							/>
+						</Modal>
 
+						{/* Clock Out Step 2: Input alasan */}
+						<Modal
+							isOpen={clockOutStep === "reason"}
+							onClose={resetClockOutFlow}
+							title="Alasan pulang cepat"
+						>
+							<div className="flex flex-col w-full">
+								<p className="text-xs text-gray-500 mb-2">
+									<span className="text-danger">*</span> Wajib diisi
+								</p>
 								<textarea
-									className="w-full border border-gray-300 rounded-lg p-2 mb-4 text-sm focus:outline-none focus:border-brand text-black"
-									placeholder="Alasan pulang cepat..."
-									rows={3}
+									className={`w-full border rounded-lg p-3 mb-1 text-sm focus:outline-none text-black resize-none ${
+										earlyClockOutReason.length >= 50
+											? "border-danger focus:border-danger-700"
+											: "border-gray-300 focus:border-brand"
+									}`}
+									placeholder="Text"
+									rows={4}
+									maxLength={50}
 									value={earlyClockOutReason}
 									onChange={(e) => setEarlyClockOutReason(e.target.value)}
 								/>
-
-								<Alert
-									variant="question"
-									title="Pulang Lebih Cepat?"
-									buttonText="Ya, Pulang"
-									cancelText="Batal"
-									onConfirm={confirmEarlyClockOut}
-									onCancel={() => setIsEarlyLeaveModalOpen(false)}
-									shadow={false}
-									className="border-0 p-0 w-full"
-								/>
+								<p
+									className={`text-xs text-right mb-4 ${
+										earlyClockOutReason.length >= 50
+											? "text-danger font-semibold"
+											: "text-gray-400"
+									}`}
+								>
+									{earlyClockOutReason.length}/50 Karakter
+								</p>
+								<div className="flex gap-3 w-full">
+									<button
+										onClick={resetClockOutFlow}
+										className="flex-1 py-2 px-4 rounded-lg bg-danger text-white font-semibold hover:bg-danger-600 transition-colors"
+									>
+										Batal
+									</button>
+									<button
+										onClick={handleSubmitReason}
+										disabled={earlyClockOutReason.trim().length === 0}
+										className={`flex-1 py-2 px-4 rounded-lg text-white font-semibold transition-colors ${
+											earlyClockOutReason.trim().length === 0
+												? "bg-disable-color cursor-not-allowed"
+												: "bg-info hover:bg-info-650"
+										}`}
+									>
+										Kirim
+									</button>
+								</div>
 							</div>
+						</Modal>
+
+						{/* Clock Out Step 3: Loading */}
+						<Modal isOpen={clockOutStep === "loading"} onClose={() => {}}>
+							<Alert
+								variant="loading"
+								title="Mohon Menunggu..."
+								shadow={false}
+								hideButtons
+								className="border-0 p-0 w-full"
+							/>
+						</Modal>
+
+						{/* Clock Out Step 4: Success */}
+						<Modal
+							isOpen={clockOutStep === "success"}
+							onClose={resetClockOutFlow}
+						>
+							<Alert
+								variant="success"
+								title="Berhasil!"
+								shadow={false}
+								hideButtons
+								className="border-0 p-0 w-full"
+							/>
 						</Modal>
 					</>
 				)}
 			</div>
+
+			{/* Error Alert Overlay */}
+			{errorAlert &&
+				createPortal(
+					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+						<Alert
+							variant="error"
+							message={errorAlert}
+							onClose={() => setErrorAlert(null)}
+						/>
+					</div>,
+					document.body,
+				)}
 		</Layout>
 	);
 }

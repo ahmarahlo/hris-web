@@ -1,35 +1,190 @@
-import { Layout, StatsCard, Table, Badge, Button } from "../../lib/components";
-import { FunnelIcon } from "@heroicons/react/24/solid";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
-	MagnifyingGlassIcon,
-	XCircleIcon,
-	CheckIcon,
-} from "@heroicons/react/24/outline";
+	Layout,
+	StatsCard,
+	Table,
+	Badge,
+	Button,
+	Alert,
+} from "../../lib/components";
+import { FunnelIcon } from "@heroicons/react/24/solid";
+import { XCircleIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { api } from "../../lib/api";
+import { useAuth } from "../../lib/AuthContext";
 
 export default function AdminDashboardPage() {
-	// Mock Data
-	const stats = [
-		{
-			title: "Total karyawan",
-			value: "3000",
-			variant: "info",
-		},
-		{
-			title: "Jumlah cuti pending",
-			value: "10",
-			variant: "info",
-		},
-		{
-			title: "Karyawan masuk hari ini",
-			value: "200",
-			variant: "success",
-		},
-		{
-			title: "Karyawan tidak masuk hari ini",
-			value: "20",
-			variant: "danger",
-		},
-	];
+	const { user } = useAuth();
+	const [stats, setStats] = useState([]);
+	const [pendingLeaveData, setPendingLeaveData] = useState([]);
+	const [attendanceData, setAttendanceData] = useState([]);
+	const [loading, setLoading] = useState(true);
+	const [alert, setAlert] = useState(null);
+	const [processingId, setProcessingId] = useState(null);
+
+	useEffect(() => {
+		fetchData();
+	}, []);
+
+	const fetchData = async () => {
+		try {
+			const [dashStats, pending, attendance] = await Promise.all([
+				api.getDashboardStats(),
+				api.getDashboardPendingLeaves(),
+				api.getDashboardAttendanceToday(),
+			]);
+
+			setStats([
+				{
+					title: "Total karyawan",
+					value: String(
+						dashStats.total_employees ?? dashStats.totalEmployees ?? 0,
+					),
+					variant: "info",
+				},
+				{
+					title: "Jumlah cuti pending",
+					value: String(
+						dashStats.pending_leaves ??
+							dashStats.total_pending_leaves ??
+							dashStats.pendingLeaves ??
+							0,
+					),
+					variant: "info",
+				},
+				{
+					title: "Karyawan masuk hari ini",
+					value: String(
+						dashStats.employees_present_today ??
+							dashStats.present_today ??
+							dashStats.presentToday ??
+							0,
+					),
+					variant: "success",
+				},
+				{
+					title: "Karyawan tidak masuk hari ini",
+					value: String(
+						dashStats.employees_absent_today ??
+							dashStats.absent_today ??
+							dashStats.absentToday ??
+							0,
+					),
+					variant: "danger",
+				},
+			]);
+
+			console.log("[AdminDashboard] Raw pending leaves:", pending);
+			// Map pending leaves
+			const mappedPending = (Array.isArray(pending) ? pending : []).map(
+				(item, i) => ({
+					id: item.id || item.no,
+					no: i + 1,
+					name: item.full_name || item.employee_name || item.name || "-",
+					date: formatDateRange(item.start_date, item.end_date),
+					reason: item.reason || "-",
+					hrNote: item.hr_note || item.note || "",
+					approver:
+						item.approved_by_name || item.approved_by || item.approver || "",
+				}),
+			);
+			console.log("[AdminDashboard] Mapped pending leaves:", mappedPending);
+			setPendingLeaveData(mappedPending);
+
+			// Map attendance
+			const mappedAttendance = (
+				Array.isArray(attendance) ? attendance : []
+			).map((item, i) => ({
+				no: i + 1,
+				name: item.full_name || item.employee_name || item.name || "-",
+				nip: item.nik || item.nip || "-",
+				date: formatDate(item.date || item.created_at),
+				division: item.department || item.division || "-",
+				clockIn: formatTime(item.clock_in || item.clockIn),
+				clockOut: formatTime(item.clock_out || item.clockOut),
+			}));
+			setAttendanceData(mappedAttendance);
+		} catch (error) {
+			console.error("Error fetching admin dashboard:", error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const formatDate = (dateStr) => {
+		if (!dateStr) return "-";
+		try {
+			const d = new Date(dateStr);
+			return d.toLocaleDateString("id-ID", {
+				day: "numeric",
+				month: "short",
+				year: "numeric",
+			});
+		} catch {
+			return dateStr;
+		}
+	};
+
+	const formatDateRange = (start, end) => {
+		if (!start) return "-";
+		const s = formatDate(start);
+		const e = formatDate(end);
+		return s === e ? s : `${s} - ${e}`;
+	};
+
+	const formatTime = (timeStr) => {
+		if (!timeStr) return "-";
+		try {
+			if (timeStr.includes("T") || timeStr.includes("-")) {
+				const d = new Date(timeStr);
+				return d
+					.toLocaleTimeString("id-ID", {
+						hour: "2-digit",
+						minute: "2-digit",
+						hour12: false,
+					})
+					.replace(":", ".");
+			}
+			return timeStr.replace(":", ".");
+		} catch {
+			return timeStr;
+		}
+	};
+
+	const handleProcessLeave = async (id, status) => {
+		console.log("[AdminDashboard] Processing leave:", {
+			id,
+			status,
+			userId: user?.id,
+		});
+		setProcessingId(id);
+		try {
+			await api.processLeave(id, {
+				note: "",
+				status: status,
+			});
+			setAlert({
+				type: "success",
+				message: `Cuti berhasil di-${status === "approved" ? "approve" : "reject"}`,
+			});
+			fetchData();
+		} catch (error) {
+			const errorMsg =
+				error.response?.data?.message ||
+				error.response?.data?.error ||
+				error.message;
+			setAlert({ type: "error", message: `Gagal: ${errorMsg}` });
+		} finally {
+			setProcessingId(null);
+			setTimeout(() => setAlert(null), 3000);
+		}
+	};
+
+	const isEarlyLeave = (timeStr) => {
+		if (!timeStr || timeStr === "-") return false;
+		const time = parseFloat(timeStr.replace(":", "."));
+		return time < 17.0;
+	};
 
 	const pendingLeaveColumns = [
 		{ header: "No", accessor: "no" },
@@ -57,69 +212,28 @@ export default function AdminDashboardPage() {
 		{
 			header: "Action",
 			accessor: "action",
-			render: () => (
+			render: (row) => (
 				<div className="flex gap-2 justify-center">
-					<button className="p-1 rounded bg-danger text-white hover:bg-danger-600">
+					<button
+						className="p-1.5 rounded-lg bg-danger text-white hover:bg-danger-600 disabled:opacity-50 transition-all duration-200 active:scale-95 hover:shadow-md"
+						disabled={processingId === row.id}
+						onClick={() => handleProcessLeave(row.id, "rejected")}
+						title="Tolak"
+					>
 						<XCircleIcon className="w-5 h-5 stroke-2" />
 					</button>
-					<button className="p-1 rounded bg-success text-white hover:bg-success-600">
+					<button
+						className="p-1.5 rounded-lg bg-success text-white hover:bg-success-700 disabled:opacity-50 transition-all duration-200 active:scale-95 hover:shadow-md"
+						disabled={processingId === row.id}
+						onClick={() => handleProcessLeave(row.id, "approved")}
+						title="Setujui"
+					>
 						<CheckIcon className="w-5 h-5 stroke-2" />
 					</button>
 				</div>
 			),
 		},
 	];
-
-	const pendingLeaveData = [
-		{
-			no: 1,
-			name: "Ariandi",
-			date: "8 Jan 2026",
-			reason: "Sakit",
-			hrNote: "",
-			approver: "",
-		},
-		{
-			no: 2,
-			name: "Raffi",
-			date: "7 Jan 2026",
-			reason: "Acara keluarga",
-			hrNote: "",
-			approver: "",
-		},
-		{
-			no: 3,
-			name: "Dimas",
-			date: "5 Jan 2026",
-			reason: "Sakit",
-			hrNote: "",
-			approver: "",
-		},
-		{
-			no: 4,
-			name: "Ahmad",
-			date: "5 Jan 2026",
-			reason: "Keluar kota",
-			hrNote: "",
-			approver: "",
-		},
-		{
-			no: 5,
-			name: "Fandi",
-			date: "1 Jan 2026",
-			reason: "Sakit",
-			hrNote: "",
-			approver: "",
-		},
-	];
-
-	// Validation Logic
-	const isEarlyLeave = (timeStr) => {
-		if (!timeStr || timeStr === "-") return false;
-		// Convert "HH.MM" or "HH:MM" to float for comparison
-		const time = parseFloat(timeStr.replace(":", "."));
-		return time < 17.0;
-	};
 
 	const attendanceColumns = [
 		{ header: "No", accessor: "no" },
@@ -157,49 +271,24 @@ export default function AdminDashboardPage() {
 		},
 	];
 
-	const attendanceData = [
-		{
-			no: 1,
-			name: "Ariandi",
-			nip: "N.1924.1003",
-			date: "1 Jan 2026",
-			division: "UI/UX Designer",
-			clockIn: "07.54",
-			clockOut: "18.09",
-		},
-		{
-			no: 2,
-			name: "Rizki",
-			nip: "N.1924.1003",
-			date: "1 Jan 2026",
-			division: "IT OPS",
-			clockIn: "08.00",
-			clockOut: "17.00",
-		},
-		{
-			no: 3,
-			name: "Reno",
-			nip: "N.1924.1003",
-			date: "1 Jan 2026",
-			division: "IT OPS",
-			clockIn: "09.23",
-			clockOut: "17.39",
-		},
-		{
-			no: 4,
-			name: "Fandi",
-			nip: "N.1924.1003",
-			date: "1 Jan 2026",
-			division: "System Analyst",
-			clockIn: "07.24",
-			clockOut: "13.09",
-		},
-	];
-
 	return (
 		<Layout activeMenu="Beranda" title="Beranda">
 			<div className="p-8 space-y-8 w-full">
-				{/* STATS CARDS */}
+				{/* Alert */}
+				{alert &&
+					createPortal(
+						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+							<Alert
+								variant={alert.type}
+								title={alert.type === "success" ? "Berhasil" : "Gagal"}
+								message={alert.message}
+								onClose={() => setAlert(null)}
+							/>
+						</div>,
+						document.body,
+					)}
+
+				{/* Stats Cards */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 					{stats.map((stat, index) => (
 						<StatsCard
@@ -211,7 +300,7 @@ export default function AdminDashboardPage() {
 					))}
 				</div>
 
-				{/* PENDING CUTI TABLE */}
+				{/* Pending Cuti Table */}
 				<div className="space-y-4">
 					<div className="flex justify-start">
 						<h3 className="text-gray-600 font-medium text-lg">
@@ -223,7 +312,7 @@ export default function AdminDashboardPage() {
 					</div>
 				</div>
 
-				{/* ABSENSI HARI INI TABLE */}
+				{/* Absensi Hari Ini Table */}
 				<div className="space-y-4">
 					<div className="flex justify-start">
 						<h3 className="text-gray-600 font-medium text-lg">

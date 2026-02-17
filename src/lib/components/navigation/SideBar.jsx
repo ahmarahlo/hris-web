@@ -4,7 +4,6 @@ import {
 	UserGroupIcon,
 	DocumentTextIcon,
 	UsersIcon,
-	ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/solid";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../AuthContext";
@@ -12,10 +11,9 @@ import { useAuth } from "../../AuthContext";
 export function SideBar({ activeMenu }) {
 	const { user } = useAuth();
 
-	// Define menus based on role
 	let menus = [];
 
-	if (user?.role === "hr") {
+	if (user?.role === "hr" || user?.role === "admin") {
 		menus = [
 			{ name: "Beranda", href: "/admin", icon: HomeIcon },
 			{
@@ -23,19 +21,10 @@ export function SideBar({ activeMenu }) {
 				href: "/admin/absensi",
 				icon: UserGroupIcon,
 			},
-			{
-				name: "Manajemen cuti",
-				href: "/admin/cuti",
-				icon: DocumentTextIcon,
-			},
-			{
-				name: "Manajemen akun",
-				href: "/admin/akun",
-				icon: UsersIcon,
-			},
+			{ name: "Manajemen cuti", href: "/admin/cuti", icon: DocumentTextIcon },
+			{ name: "Manajemen akun", href: "/admin/akun", icon: UsersIcon },
 		];
 	} else {
-		// Default to employee
 		menus = [
 			{ name: "Beranda", href: "/dashboard", icon: HomeIcon },
 			{ name: "Pengajuan Cuti", href: "/cuti", icon: UserGroupIcon },
@@ -44,7 +33,7 @@ export function SideBar({ activeMenu }) {
 
 	return (
 		<aside className="fixed left-0 top-0 h-screen w-80 bg-brand text-white flex flex-col shadow-xl z-50">
-			{/* LOGO SECTION */}
+			{/* Logo */}
 			<div className="flex text-center items-center justify-center pt-10 pb-8 w-29 mx-auto">
 				<img
 					src={LogoHris}
@@ -53,8 +42,8 @@ export function SideBar({ activeMenu }) {
 				/>
 			</div>
 
-			{/* MENU SECTION */}
-			<nav className="flex flex-col gap-2 mt-4 flex-1">
+			{/* Menu */}
+			<nav className="flex flex-col mt-6 flex-1">
 				{menus.map((menu) => {
 					const isActive = activeMenu === menu.name;
 					const Icon = menu.icon;
@@ -63,15 +52,11 @@ export function SideBar({ activeMenu }) {
 						<Link
 							key={menu.name}
 							to={menu.href}
-							className={`
-                relative flex items-center gap-3 px-6 py-3 w-full
-                text-lg font-medium transition-all duration-300 ease-in-out
-                ${
-									isActive
-										? "bg-white text-brand! font-bold shadow-lg"
-										: "text-white opacity-90 hover:opacity-100 hover:bg-brand-650 hover:font-bold hover:shadow-inner"
-								}
-              `}
+							className={`relative flex items-center gap-3 px-6 py-3 w-full text-lg font-medium transition-all duration-300 ease-in-out ${
+								isActive
+									? "bg-white text-brand! font-bold shadow-lg"
+									: "text-white opacity-90 hover:opacity-100 hover:bg-brand-650 hover:font-bold hover:shadow-inner"
+							}`}
 						>
 							<Icon className="w-5 h-5" />
 							{menu.name}

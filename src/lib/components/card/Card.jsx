@@ -6,6 +6,7 @@ export function Card({
 	jamMasuk,
 	jamPulang,
 	durasi,
+	tanggal,
 	totalCuti,
 	sisaCuti,
 	onAction,
@@ -129,8 +130,14 @@ export function Card({
 							</div>
 						</div>
 
-						{/* BAGIAN KANAN: Tombol di Bawah */}
-						<div className="w-[50%] flex flex-col justify-end items-end">
+						{/* BAGIAN KANAN: Tanggal + Tombol */}
+						<div className="w-[50%] flex flex-col justify-between items-end">
+							{/* Tanggal */}
+							{tanggal && (
+								<p className="text-brand-700 text-sm font-medium text-right">
+									{tanggal}
+								</p>
+							)}
 							{variant === "absen_lengkap" ? (
 								<div className="flex flex-col gap-2 w-full items-end">
 									<button

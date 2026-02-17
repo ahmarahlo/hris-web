@@ -7,6 +7,7 @@ import ManajemenAbsensiPage from "./pages/admin/ManajemenAbsensiPage";
 import ManajemenCutiPage from "./pages/admin/ManajemenCutiPage";
 import ManajemenAkunPage from "./pages/admin/ManajemenAkunPage";
 import PrivateRoute from "./lib/components/PrivateRoute";
+import { USER_ROLES } from "./lib/constants";
 import "./App.css";
 
 function App() {
@@ -16,13 +17,21 @@ function App() {
 				<Route path="/login" element={<LoginPage />} />
 
 				{/* Employee Routes */}
-				<Route element={<PrivateRoute allowedRoles={["employee", "hr"]} />}>
+				<Route
+					element={
+						<PrivateRoute allowedRoles={[USER_ROLES.EMPLOYEE, USER_ROLES.HR]} />
+					}
+				>
 					<Route path="/dashboard" element={<DashboardPage />} />
 					<Route path="/cuti" element={<CutiPage />} />
 				</Route>
 
 				{/* HR Routes */}
-				<Route element={<PrivateRoute allowedRoles={["hr"]} />}>
+				<Route
+					element={
+						<PrivateRoute allowedRoles={[USER_ROLES.HR, USER_ROLES.ADMIN]} />
+					}
+				>
 					<Route path="/admin" element={<AdminDashboardPage />} />
 					<Route path="/admin/absensi" element={<ManajemenAbsensiPage />} />
 					<Route path="/admin/cuti" element={<ManajemenCutiPage />} />

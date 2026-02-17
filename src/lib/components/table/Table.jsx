@@ -98,7 +98,7 @@ export function Table({ columns = [], data = [], maxheight = "500px" }) {
 								paginatedData.map((row, rowIndex) => (
 									<tr
 										key={rowIndex}
-										className="bg-white border-b border-gray-100 hover:bg-brand-100/30 transition-colors duration-150"
+										className="bg-white border-b border-gray-100 hover:bg-brand-100/30 transition-all duration-200"
 									>
 										{columns.map((col, colIndex) => (
 											<td
@@ -128,17 +128,17 @@ export function Table({ columns = [], data = [], maxheight = "500px" }) {
 			{/* Controls Bottom (Pagination) */}
 			<div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-600">
 				<div>
-					Showing {filteredData.length > 0 ? showingStart : 0} to{" "}
-					{showingEnd} of {filteredData.length} entries
+					Showing {filteredData.length > 0 ? showingStart : 0} to {showingEnd}{" "}
+					of {filteredData.length} entries
 				</div>
 
 				<div className="flex items-center gap-1">
 					<button
-						className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
+						className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 active:scale-90 transition-all duration-200"
 						onClick={() => handlePageChange(currentPage - 1)}
 						disabled={currentPage === 1}
 					>
-						<ChevronLeftIcon className="w-5 h-5" />
+						<ChevronLeftIcon className="w-5 h-5 text-gray-600" />
 					</button>
 
 					{/* Simple Pagination Numbers */}
@@ -159,9 +159,9 @@ export function Table({ columns = [], data = [], maxheight = "500px" }) {
 							typeof page === "number" ? (
 								<button
 									key={idx}
-									className={`px-3 py-1 rounded ${
+									className={`px-3 py-1 rounded transition-all duration-200 active:scale-95 ${
 										currentPage === page
-											? "bg-brand text-white font-medium"
+											? "bg-brand text-white font-medium shadow-md scale-110"
 											: "hover:bg-gray-100"
 									}`}
 									onClick={() => handlePageChange(page)}
@@ -176,11 +176,11 @@ export function Table({ columns = [], data = [], maxheight = "500px" }) {
 						)}
 
 					<button
-						className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
+						className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 active:scale-95 transition-all duration-200"
 						onClick={() => handlePageChange(currentPage + 1)}
 						disabled={currentPage >= totalPages}
 					>
-						<ChevronRightIcon className="w-5 h-5" />
+						<ChevronRightIcon className="w-5 h-5 text-gray-600" />
 					</button>
 				</div>
 			</div>

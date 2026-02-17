@@ -88,7 +88,7 @@ export function TopBar() {
 											setIsOpen(false);
 											setIsResetPasswordOpen(true);
 										}}
-										className="w-full text-left px-4 py-3 text-sm text-success hover:bg-success hover:text-white flex items-center gap-2 transition-colors font-medium rounded-none"
+										className="w-full text-left px-4 py-3 text-sm text-success hover:bg-success hover:text-white flex items-center gap-2 transition-all duration-200 font-medium rounded-none active:scale-95"
 									>
 										<KeyIcon className="w-5 h-5" />
 										Reset Password
@@ -97,7 +97,7 @@ export function TopBar() {
 
 								<button
 									onClick={handleLogout}
-									className="w-full text-left px-4 py-3 text-sm text-danger hover:bg-danger hover:text-white flex items-center gap-2 transition-colors font-medium rounded-none"
+									className="w-full text-left px-4 py-3 text-sm text-danger hover:bg-danger hover:text-white flex items-center gap-2 transition-all duration-200 font-medium rounded-none active:scale-95"
 								>
 									<ArrowLeftOnRectangleIcon className="w-5 h-5" />
 									Logout

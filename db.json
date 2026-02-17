@@ -1,0 +1,10 @@
+{
+	"leaves": [
+		{ "id": 1, "type": "Sick Leave", "status": "Approved" },
+		{ "id": 2, "type": "Vacation", "status": "Pending" }
+	],
+	"attendance": {
+		"today": { "clockIn": "08:00", "clockOut": null },
+		"history": []
+	}
+}
