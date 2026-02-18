@@ -3,10 +3,11 @@ module.exports = {
     {
       name: "hris-web-app",
       script: "serve",
-      instances: 1,
+      args: ["-s", "dist", "-l", "3007"],
+      instances: 1, // WAJIB 1
+      exec_mode: "fork", // jangan cluster
       autorestart: true,
       watch: false,
-      max_memory_restart: "200M",
       env: {
         NODE_ENV: "development",
       },
