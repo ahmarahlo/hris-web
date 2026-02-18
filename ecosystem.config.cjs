@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "hris-web-app",
       script: "serve",
-      args: "-s dist -l 3007",
+      args: ["-s", "dist", "-l", "3007"],
       instances: 1,
       autorestart: true,
       watch: false,
