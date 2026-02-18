@@ -1,6 +1,6 @@
 import { Button } from "../button/Button";
 import dismissGif from "../../../assets/dismiss.gif";
-import successGif from "../../../assets/success.gif";
+import successGif from "../../../assets/Success.gif";
 import questionGif from "../../../assets/question.gif";
 
 const BASE_STYLES =
