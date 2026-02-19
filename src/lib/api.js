@@ -38,7 +38,10 @@ export const handleApiError = (error) => {
 	if (error.response?.data) {
 		console.error("[API Error Data]:", error.response.data);
 	}
-	return Promise.reject(new Error(message));
+
+	// Enrich the original error object with our consistent message
+	error.message = message;
+	return Promise.reject(error);
 };
 
 // ==========================================
@@ -104,10 +107,11 @@ export const api = {
 		return response.data;
 	},
 
-	changePassword: async (password, oldPassword) => {
+	changePassword: async (data) => {
 		const response = await apiClient.post("/auth/change-password", {
-			password,
-			oldPassword,
+			old_password: data.oldPassword || data.old_password,
+			new_password: data.newPassword || data.new_password,
+			confirm_password: data.confirmPassword || data.confirm_password,
 		});
 		return response.data;
 	},
@@ -153,11 +157,9 @@ export const api = {
 	},
 
 	/** @returns {object|null} Response data atau null jika gagal */
-	clockIn: async (time) => {
+	clockIn: async () => {
 		try {
-			const response = await apiClient.post(ENDPOINTS.ATTENDANCE.CLOCK_IN, {
-				clock_in: time,
-			});
+			const response = await apiClient.post(ENDPOINTS.ATTENDANCE.CLOCK_IN);
 			return response.data;
 		} catch (error) {
 			console.error("Error clocking in:", error);
@@ -166,11 +168,10 @@ export const api = {
 	},
 
 	/** @returns {object|null} Response data atau null jika gagal */
-	clockOut: async (time, reason = null) => {
+	clockOut: async (note = null) => {
 		try {
 			const response = await apiClient.post(ENDPOINTS.ATTENDANCE.CLOCK_OUT, {
-				clock_out: time,
-				reason: reason,
+				note: note,
 			});
 			return response.data;
 		} catch (error) {
@@ -206,7 +207,8 @@ export const api = {
 
 			return leavesArray.map((item) => ({
 				...item,
-				id: item.id || item.leave_id,
+				id:
+					item.id || item.leave_id || item.id_leave || item.id_cuti || item.no,
 				startDate: item.start_date || item.startDate,
 				endDate: item.end_date || item.endDate,
 			}));
@@ -239,7 +241,8 @@ export const api = {
 			const arr = extractArray(response.data, "getDashboardPendingLeaves");
 			return arr.map((item) => ({
 				...item,
-				id: item.id || item.leave_id || item.id_leave,
+				id:
+					item.id || item.leave_id || item.id_leave || item.id_cuti || item.no,
 			}));
 		} catch (error) {
 			console.error("Error fetching pending leaves:", error);
@@ -277,7 +280,8 @@ export const api = {
 			const arr = extractArray(response.data, "getDashboardLeaves");
 			return arr.map((item) => ({
 				...item,
-				id: item.id || item.leave_id,
+				id:
+					item.id || item.leave_id || item.id_leave || item.id_cuti || item.no,
 			}));
 		} catch (error) {
 			console.error("Error fetching all leaves:", error);
@@ -321,7 +325,10 @@ export const api = {
 	},
 
 	updateEmployee: async (id, data) => {
-		const response = await apiClient.patch(EMPLOYEE_ENDPOINTS.DETAIL(id), data);
+		const response = await apiClient.put(
+			ENDPOINTS.DASHBOARD.EMPLOYEE_DETAIL(id),
+			data,
+		);
 		return response.data;
 	},
 
@@ -332,14 +339,11 @@ export const api = {
 		return response.data;
 	},
 
-	resetEmployeePassword: async (id) => {
+	resetEmployeePassword: async (id, data) => {
 		const response = await apiClient.post(
 			ENDPOINTS.DASHBOARD.RESET_PASSWORD(id),
+			data,
 		);
-		return response.data;
-	},
-	unlockEmployee: async (id, data) => {
-		const response = await apiClient.put(ENDPOINTS.DASHBOARD.UNLOCK(id), data);
 		return response.data;
 	},
 

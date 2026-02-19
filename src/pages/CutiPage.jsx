@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Layout, Table, Badge, Button, Modal, Alert } from "../lib/components";
-import { DatePicker } from "../lib/components/datepicker/DatePicker";
+import { DateInput } from "../lib/components/datepicker/DateInput";
 import { CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { api } from "../lib/api";
+import { LOADING_DELAY } from "../lib/constants";
 
 export default function CutiPage() {
 	const [formData, setFormData] = useState({
@@ -16,41 +17,36 @@ export default function CutiPage() {
 	const [leaveBalance, setLeaveBalance] = useState(0);
 	const [loading, setLoading] = useState(true);
 
-	const [showStartPicker, setShowStartPicker] = useState(false);
-	const [showEndPicker, setShowEndPicker] = useState(false);
-
 	// Submit flow: null | "loading" | "success" | "error"
 	const [submitStep, setSubmitStep] = useState(null);
 	const [submitError, setSubmitError] = useState("");
 
 	useEffect(() => {
-		const fetchData = async () => {
-			try {
-				const [leaves, profile] = await Promise.all([
-					api.getLeaves().catch(() => []),
-					api.getMe().catch(() => ({ leaveBalance: 0 })),
-				]);
-				setLeaveHistory(leaves);
-				setLeaveBalance(profile.leaveBalance || profile.leave_balance || 0);
-			} catch (error) {
-				console.error("Error fetching cuti data:", error);
-			} finally {
-				setLoading(false);
-			}
-		};
 		fetchData();
 	}, []);
 
-	// --- Format Helpers ---
+	const fetchData = async () => {
+		setLoading(true);
+		try {
+			const minDelay = new Promise((resolve) =>
+				setTimeout(resolve, LOADING_DELAY),
+			);
 
-	const formatDateDisplay = (date) => {
-		if (!date) return "";
-		const d = new Date(date);
-		const day = d.getDate().toString().padStart(2, "0");
-		const month = (d.getMonth() + 1).toString().padStart(2, "0");
-		const year = d.getFullYear();
-		return `${day}/${month}/${year}`;
+			const [leaves, profile] = await Promise.all([
+				api.getLeaves().catch(() => []),
+				api.getMe().catch(() => ({ leaveBalance: 0 })),
+				minDelay,
+			]);
+			setLeaveHistory(leaves);
+			setLeaveBalance(profile.leaveBalance || profile.leave_balance || 0);
+		} catch (error) {
+			console.error("Error fetching cuti data:", error);
+		} finally {
+			setLoading(false);
+		}
 	};
+
+	// --- Format Helpers ---
 
 	const formatDateAPI = (date) => {
 		if (!date) return "";
@@ -71,6 +67,22 @@ export default function CutiPage() {
 		});
 	};
 
+	const checkOverlap = (start, end) => {
+		const newStart = new Date(start);
+		const newEnd = new Date(end);
+
+		return leaveHistory.some((l) => {
+			// Hanya cek pengajuan yang statusnya pending atau approved
+			if (l.status === "rejected") return false;
+
+			const existingStart = new Date(l.startDate);
+			const existingEnd = new Date(l.endDate);
+
+			// Logic overlap: (StartA <= EndB) and (EndA >= StartB)
+			return newStart <= existingEnd && newEnd >= existingStart;
+		});
+	};
+
 	// --- Handlers ---
 
 	const handleDateSelect = (field, date) => {
@@ -88,8 +100,6 @@ export default function CutiPage() {
 
 			return updated;
 		});
-		if (field === "startDate") setShowStartPicker(false);
-		if (field === "endDate") setShowEndPicker(false);
 	};
 
 	const handleSubmit = async () => {
@@ -109,6 +119,14 @@ export default function CutiPage() {
 
 		if (leaveBalance <= 0) {
 			setSubmitError("Sisa cuti anda sudah habis!");
+			setSubmitStep("error");
+			return;
+		}
+
+		if (checkOverlap(formData.startDate, formData.endDate)) {
+			setSubmitError(
+				"Anda sudah memiliki pengajuan cuti pada rentang tanggal tersebut!",
+			);
 			setSubmitStep("error");
 			return;
 		}
@@ -149,7 +167,7 @@ export default function CutiPage() {
 	// --- Table Config ---
 
 	const columns = [
-		{ header: "No", accessor: "no" },
+		{ header: "No", accessor: "no", className: "w-16" },
 		{
 			header: "Tanggal cuti",
 			accessor: "dateRange",
@@ -159,8 +177,18 @@ export default function CutiPage() {
 				</span>
 			),
 		},
-		{ header: "Alasan cuti", accessor: "reason" },
+		{
+			header: "Alasan cuti",
+			accessor: "reason",
+			className: "min-w-[200px] max-w-[300px]",
+			render: (row) => (
+				<div className="text-left line-clamp-2" title={row.reason}>
+					{row.reason}
+				</div>
+			),
+		},
 		{ header: "Catatan HR", accessor: "hrNote" },
+		{ header: "User approve", accessor: "approver" },
 		{
 			header: "Status cuti",
 			accessor: "status",
@@ -185,6 +213,7 @@ export default function CutiPage() {
 			...item,
 			no: index + 1,
 			hrNote: item.hr_note || item.note || "-",
+			approver: item.approver || "-",
 		}));
 
 	const approvedOrRejected = leaveHistory
@@ -193,11 +222,22 @@ export default function CutiPage() {
 			...item,
 			no: index + 1,
 			hrNote: item.hr_note || item.note || "-",
+			approver: item.approver || "-",
 		}));
 
 	return (
 		<Layout activeMenu="Pengajuan Cuti" title="Pengajuan cuti">
-			<div className="p-8 space-y-8 max-w-5xl">
+			<div className="p-8 space-y-8 max-w-5xl w-full">
+				{loading && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+						<Alert
+							variant="loading"
+							title="Memuat Data Cuti..."
+							shadow={true}
+						/>
+					</div>
+				)}
+
 				{/* Form Pengajuan Cuti */}
 				<div className="bg-white p-6 rounded-lg space-y-6">
 					<h2 className="text-xl font-semibold text-gray-800 border-b border-gray-100 pb-4">
@@ -210,34 +250,12 @@ export default function CutiPage() {
 							<label className="text-gray-600 font-medium">
 								Tanggal mulai <span className="float-right">:</span>
 							</label>
-							<div className="relative">
-								<div
-									className="relative cursor-pointer"
-									onClick={() => {
-										setShowStartPicker(!showStartPicker);
-										setShowEndPicker(false);
-									}}
-								>
-									<input
-										type="text"
-										readOnly
-										placeholder="dd/mm/yyyy"
-										value={formatDateDisplay(formData.startDate)}
-										className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-brand cursor-pointer bg-white text-black"
-									/>
-									<CalendarDaysIcon className="w-5 h-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
-								</div>
-								{showStartPicker && (
-									<div className="absolute z-50 top-full mt-2 left-0 shadow-xl rounded-lg">
-										<DatePicker
-											value={formData.startDate}
-											onChange={(d) => handleDateSelect("startDate", d)}
-											onClose={() => setShowStartPicker(false)}
-											minDate={new Date()}
-										/>
-									</div>
-								)}
-							</div>
+							<DateInput
+								value={formData.startDate}
+								onChange={(d) => handleDateSelect("startDate", d)}
+								placeholder="dd/mm/yyyy"
+								minDate={new Date()}
+							/>
 						</div>
 
 						{/* Tanggal Selesai */}
@@ -245,34 +263,13 @@ export default function CutiPage() {
 							<label className="text-gray-600 font-medium">
 								Tanggal selesai <span className="float-right">:</span>
 							</label>
-							<div className="relative">
-								<div
-									className="relative cursor-pointer"
-									onClick={() => {
-										setShowEndPicker(!showEndPicker);
-										setShowStartPicker(false);
-									}}
-								>
-									<input
-										type="text"
-										readOnly
-										placeholder="dd/mm/yyyy"
-										value={formatDateDisplay(formData.endDate)}
-										className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-brand cursor-pointer bg-white text-black"
-									/>
-									<CalendarDaysIcon className="w-5 h-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
-								</div>
-								{showEndPicker && (
-									<div className="absolute z-50 top-full mt-2 left-0 shadow-xl rounded-lg">
-										<DatePicker
-											value={formData.endDate}
-											onChange={(d) => handleDateSelect("endDate", d)}
-											onClose={() => setShowEndPicker(false)}
-											minDate={formData.startDate || new Date()}
-										/>
-									</div>
-								)}
-							</div>
+							<DateInput
+								value={formData.endDate}
+								onChange={(d) => handleDateSelect("endDate", d)}
+								placeholder="dd/mm/yyyy"
+								minDate={formData.startDate || new Date()}
+								disabled={!formData.startDate}
+							/>
 						</div>
 
 						{/* Alasan Cuti */}
@@ -287,8 +284,22 @@ export default function CutiPage() {
 									onChange={(e) =>
 										setFormData((prev) => ({ ...prev, reason: e.target.value }))
 									}
-									className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24 resize-none focus:outline-none focus:border-brand bg-white text-black"
+									maxLength={50}
+									className={`w-full border rounded-lg px-4 py-2 h-24 resize-none focus:outline-none bg-white text-black ${
+										formData.reason.length >= 50
+											? "border-danger focus:border-danger-700"
+											: "border-gray-300 focus:border-brand"
+									}`}
 								/>
+								<p
+									className={`text-xs text-right mt-1 ${
+										formData.reason.length >= 50
+											? "text-danger font-semibold"
+											: "text-gray-400"
+									}`}
+								>
+									{formData.reason.length}/50 Karakter
+								</p>
 							</div>
 						</div>
 

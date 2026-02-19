@@ -10,3 +10,4 @@ export { StatsCard } from "./card/StatsCard.jsx";
 export { Modal } from "./modal/Modal.jsx";
 export { Layout } from "./layout/Layout.jsx";
 export { Badge } from "./badge/Badge.jsx";
+export { Dropdown } from "./dropdown/Dropdown.jsx";

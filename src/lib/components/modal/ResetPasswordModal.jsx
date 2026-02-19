@@ -1,21 +1,32 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Modal } from "./Modal";
 import { Button } from "../button/Button";
 import { Input } from "../input/Input";
+import { api } from "../../api";
+import { Alert } from "../alert/Alert";
+import { useAuth } from "../../AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export function ResetPasswordModal({ isOpen, onClose, onSuccess }) {
+	const { logout } = useAuth();
+	const navigate = useNavigate();
 	const [formData, setFormData] = useState({
 		oldPassword: "",
 		newPassword: "",
 		confirmPassword: "",
 	});
 	const [errors, setErrors] = useState({});
+	const [status, setStatus] = useState("idle"); // idle, loading, success, error
+	const [message, setMessage] = useState("");
 
 	// Reset state when modal opens/closes
 	useEffect(() => {
 		if (isOpen) {
 			setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" });
 			setErrors({});
+			setStatus("idle");
+			setMessage("");
 		}
 	}, [isOpen]);
 
@@ -62,56 +73,112 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }) {
 		return Object.keys(newErrors).length === 0;
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		if (validate()) {
-			// Simulate API Call Success
-			if (onSuccess) onSuccess();
-			onClose();
+			setStatus("loading");
+			setMessage("");
+			try {
+				await api.changePassword(formData);
+				setStatus("success");
+				setMessage("Password berhasil diubah! Silakan login kembali.");
+				if (onSuccess) onSuccess();
+
+				setTimeout(() => {
+					onClose();
+					logout();
+					navigate("/login");
+				}, 1500);
+			} catch (error) {
+				setStatus("idle");
+				const errorMsg =
+					error.response?.data?.message || "Gagal mengubah password";
+				// Fix uncapitalized message from API
+				const formattedMsg =
+					errorMsg === "password lama salah" ? "Password lama salah" : errorMsg;
+
+				setErrors({
+					oldPassword: formattedMsg,
+				});
+			}
 		}
 	};
 
 	return (
-		<Modal isOpen={isOpen} onClose={onClose} title="Reset Password">
-			<div className="space-y-4">
-				<Input
-					label="Password Lama"
-					type="text"
-					name="oldPassword"
-					value={formData.oldPassword}
-					onChange={handleChange}
-					placeholder="Masukkan password lama"
-					error={errors.oldPassword}
-				/>
+		<>
+			<Modal isOpen={isOpen} onClose={onClose} title="Reset Password">
+				<div className="space-y-4">
+					{status === "loading" && (
+						<div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
+							<Alert
+								variant="loading"
+								title="Menyimpan..."
+								shadow={false}
+								hideButtons
+							/>
+						</div>
+					)}
 
-				<Input
-					label="Password Baru"
-					type="text"
-					name="newPassword"
-					value={formData.newPassword}
-					onChange={handleChange}
-					placeholder="Masukkan password baru"
-					error={errors.newPassword}
-				/>
+					<Input
+						label="Password Lama"
+						type="text"
+						name="oldPassword"
+						value={formData.oldPassword}
+						onChange={handleChange}
+						placeholder="Masukkan password lama"
+						error={errors.oldPassword}
+					/>
 
-				<Input
-					label="Konfirmasi Password Baru"
-					type="text"
-					name="confirmPassword"
-					value={formData.confirmPassword}
-					onChange={handleChange}
-					placeholder="Ulangi password baru"
-					error={errors.confirmPassword}
-				/>
+					<Input
+						label="Password Baru"
+						type="text"
+						name="newPassword"
+						value={formData.newPassword}
+						onChange={handleChange}
+						placeholder="Masukkan password baru"
+						error={errors.newPassword}
+					/>
 
-				<div className="flex justify-end gap-3 pt-4">
-					<Button variant="danger" onClick={onClose}>
-						Batal
-					</Button>
-					<Button variant="primary" onClick={handleSubmit}>
-						Simpan
-					</Button>
+					<Input
+						label="Konfirmasi Password Baru"
+						type="text"
+						name="confirmPassword"
+						value={formData.confirmPassword}
+						onChange={handleChange}
+						placeholder="Ulangi password baru"
+						error={errors.confirmPassword}
+					/>
+
+					<div className="flex justify-end gap-3 pt-4">
+						<Button
+							variant="danger"
+							onClick={onClose}
+							disabled={status === "loading" || status === "success"}
+						>
+							Batal
+						</Button>
+						<Button
+							variant="info"
+							onClick={handleSubmit}
+							disabled={status === "loading" || status === "success"}
+						>
+							Simpan
+						</Button>
+					</div>
 				</div>
-			</div>
-		</Modal>
+			</Modal>
+			{status === "success" &&
+				createPortal(
+					<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+						<Alert
+							variant="success"
+							title="Berhasil!"
+							message={message}
+							shadow={true}
+							hideButtons
+						/>
+					</div>,
+					document.body,
+				)}
+		</>
 	);
 }

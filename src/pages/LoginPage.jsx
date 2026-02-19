@@ -68,19 +68,25 @@ export default function LoginPage() {
 			}
 		} catch (err) {
 			let errorMsg = err.message || "Terjadi kesalahan saat login";
+			const status = err.response?.status;
+
 			if (
+				status === 401 ||
+				errorMsg.includes("401") ||
+				errorMsg.toLowerCase().includes("invalid credentials")
+			) {
+				errorMsg = "Email atau password salah.";
+				setError(errorMsg);
+			} else if (
 				errorMsg.toLowerCase().includes("blokir") ||
 				errorMsg.toLowerCase().includes("locked")
 			) {
 				setIsBlockedAlertOpen(true);
-			} else if (
-				errorMsg.includes("401") ||
-				errorMsg.includes("Invalid credentials")
-			) {
-				errorMsg = "Email atau password salah.";
-				setError(errorMsg);
 			} else {
-				setError(errorMsg);
+				// Show real message from backend if possible, otherwise use the generic 500
+				const detailedMsg =
+					err.response?.data?.message || err.response?.data || errorMsg;
+				setError(detailedMsg);
 			}
 		} finally {
 			setIsLoading(false);
@@ -105,16 +111,20 @@ export default function LoginPage() {
 			});
 			return;
 		}
-		if (newPassword.length < 6) {
+		if (newPassword.length < 8) {
 			setPasswordAlert({
 				type: "error",
-				message: "Password minimal 6 karakter",
+				message: "Password minimal 8 karakter",
 			});
 			return;
 		}
 
 		try {
-			await api.changePassword(newPassword, oldPassword);
+			await api.changePassword({
+				oldPassword,
+				newPassword,
+				confirmPassword,
+			});
 			setPasswordAlert({
 				type: "success",
 				message: "Password berhasil diubah, silakan masuk ke dashboard.",

@@ -15,6 +15,7 @@ import {
 	LockOpenIcon,
 } from "@heroicons/react/24/solid";
 import { api } from "../../lib/api";
+import { LOADING_DELAY } from "../../lib/constants";
 
 export default function ManajemenAkunPage() {
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -26,29 +27,52 @@ export default function ManajemenAkunPage() {
 	const [deleteConfirm, setDeleteConfirm] = useState(null);
 	const [unlockConfirm, setUnlockConfirm] = useState(null);
 	const [isUnlockInProgress, setIsUnlockInProgress] = useState(false);
+	const [loading, setLoading] = useState(true);
+
+	const [params, setParams] = useState({
+		page: 1,
+		limit: 5,
+		search: "",
+		status: "",
+		department: "",
+	});
+	const [totalCount, setTotalCount] = useState(0);
 
 	useEffect(() => {
 		fetchEmployees();
-	}, []);
+	}, [params]);
 
 	const fetchEmployees = async () => {
+		setLoading(true);
 		try {
-			const employees = await api.getDashboardEmployees();
+			// Convert params to API format (limit instead of pageSize)
+			const apiParams = {
+				page: params.page,
+				limit: params.limit,
+				search: params.search,
+				status: params.status,
+				department: params.department,
+			};
+
+			const minDelay = new Promise((resolve) =>
+				setTimeout(resolve, LOADING_DELAY),
+			);
+
+			const [response] = await Promise.all([
+				api.getDashboardEmployees(apiParams),
+				minDelay,
+			]);
+
+			// Handle potential wrapper from API (e.g. { data: [], total: 100 })
+			const employees = response.data || response || [];
+
+			console.log("[Account List Raw Data]:", employees);
+
+			const total = response.total ?? employees.length;
+			setTotalCount(total);
+
 			const mapped = (Array.isArray(employees) ? employees : []).map(
 				(item, i) => {
-					// Cek berbagai kemungkinan nama field dari API (snake_case atau camelCase)
-					const failedAttempts =
-						item.failed_login_attempt ?? item.failedLoginAttempt ?? 0;
-					const lockedUntil = item.locked_until ?? item.lockedUntil;
-
-					// --- SIMULASI QA (HANYA UNTUK TESTING) ---
-					// Paksa akun Budi Pratama jadi blokir agar QA bisa ngetes fitur Unlock & Badge Blokir
-					const isBudi =
-						item.full_name?.includes("Budi") ||
-						item.employee_name?.includes("Budi");
-					const isLocked = lockedUntil || failedAttempts >= 3 || isBudi;
-					// -----------------------------------------
-
 					return {
 						id: item.id,
 						no: i + 1,
@@ -63,7 +87,7 @@ export default function ManajemenAkunPage() {
 						email: item.email || "-",
 						division: item.department || item.division || item.position || "-",
 						approver: item.approved_by_name || item.approved_by || "-",
-						status: isLocked ? "blokir" : item.status || "active",
+						status: item.status || "active",
 						_raw: item,
 					};
 				},
@@ -71,6 +95,8 @@ export default function ManajemenAkunPage() {
 			setUsers(mapped);
 		} catch (error) {
 			console.error("Error fetching employees:", error);
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -81,6 +107,7 @@ export default function ManajemenAkunPage() {
 	const confirmDelete = async () => {
 		const user = deleteConfirm;
 		setDeleteConfirm(null);
+		setAlert({ type: "loading" });
 		try {
 			await api.deleteEmployee(user.id);
 			setAlert({
@@ -101,25 +128,42 @@ export default function ManajemenAkunPage() {
 	const confirmUnlock = async () => {
 		const user = unlockConfirm;
 		setUnlockConfirm(null);
-		setCreatedUser({
-			id: user.id,
-			name: user.name,
-			email: user.email,
-		});
+
+		// Redirect to password generation modal
+		setCreatedUser(user);
 		setIsUnlockInProgress(true);
 		setIsPasswordModalOpen(true);
 	};
 
+	const divisionOptions = [
+		{ label: "UI/UX Designer", value: "UI/UX Designer" },
+		{ label: "IT OPS", value: "IT OPS" },
+		{ label: "System Analyst", value: "System Analyst" },
+		{ label: "QA", value: "QA" },
+		{ label: "HR", value: "HR" },
+	];
+
 	const columns = [
-		{ header: "No", accessor: "no" },
+		{ header: "No", accessor: "no", className: "w-16" },
 		{ header: "Nama karyawan", accessor: "name" },
 		{ header: "NIP", accessor: "nip" },
 		{ header: "Email", accessor: "email" },
-		{ header: "Divisi", accessor: "division" },
+		{
+			header: "Divisi",
+			accessor: "division",
+			filterOptions: [{ label: "Semua Divisi", value: "" }, ...divisionOptions],
+			onFilterSelect: (opt) => handleFilterChange("department", opt.value),
+		},
 		{ header: "User approve", accessor: "approver" },
 		{
 			header: "Status",
 			accessor: "status",
+			filterOptions: [
+				{ label: "Semua Status", value: "" },
+				{ label: "Active", value: "active" },
+				{ label: "Blokir", value: "blocked" },
+			],
+			onFilterSelect: (opt) => handleFilterChange("status", opt.value),
 			render: (row) => (
 				<Badge variant={row.status === "active" ? "approve" : "blokir"}>
 					{row.status === "active" ? "Active" : "Blokir"}
@@ -131,15 +175,6 @@ export default function ManajemenAkunPage() {
 			accessor: "action",
 			render: (row) => (
 				<div className="flex gap-2 justify-center">
-					{row.status === "blokir" && (
-						<button
-							className="p-1.5 rounded-lg bg-info text-white hover:bg-info-600 transition-all duration-200 active:scale-95 hover:shadow-md"
-							onClick={() => handleUnlock(row)}
-							title="Buka Gembok"
-						>
-							<LockOpenIcon className="w-5 h-5" />
-						</button>
-					)}
 					<button
 						className="p-1.5 rounded-lg bg-danger text-white hover:bg-danger-600 transition-all duration-200 active:scale-95 hover:shadow-md"
 						onClick={() => handleDelete(row)}
@@ -147,17 +182,44 @@ export default function ManajemenAkunPage() {
 					>
 						<TrashIcon className="w-5 h-5" />
 					</button>
-					<button
-						className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-700 transition-all duration-200 active:scale-95 hover:shadow-md"
-						onClick={() => openEditModal(row)}
-						title="Edit Akun"
-					>
-						<PencilSquareIcon className="w-5 h-5" />
-					</button>
+					{row.status !== "active" ? (
+						<button
+							className="p-1.5 rounded-lg bg-info text-white hover:bg-info-600 transition-all duration-200 active:scale-95 hover:shadow-md"
+							onClick={() => handleUnlock(row)}
+							title="Buka Gembok"
+						>
+							<LockOpenIcon className="w-5 h-5" />
+						</button>
+					) : (
+						<button
+							className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-700 transition-all duration-200 active:scale-95 hover:shadow-md"
+							onClick={() => openEditModal(row)}
+							title="Edit Akun"
+						>
+							<PencilSquareIcon className="w-5 h-5" />
+						</button>
+					)}
 				</div>
 			),
 		},
 	];
+
+	const handleParamsChange = (newParams) => {
+		setParams((prev) => ({
+			...prev,
+			page: newParams.page,
+			limit: newParams.pageSize,
+			search: newParams.search || prev.search,
+		}));
+	};
+
+	const handleFilterChange = (key, value) => {
+		setParams((prev) => ({
+			...prev,
+			[key]: value,
+			page: 1, // Reset to page 1 on filter
+		}));
+	};
 
 	// --- Create / Edit Account ---
 
@@ -165,6 +227,7 @@ export default function ManajemenAkunPage() {
 		try {
 			if (editingUser) {
 				// Edit mode
+				setAlert({ type: "loading" });
 				const payload = {
 					full_name: data.name,
 					phone: data.phone,
@@ -186,8 +249,6 @@ export default function ManajemenAkunPage() {
 					full_name: data.name,
 					email: data.email,
 					phone: data.phone,
-					phone_number: data.phone,
-					no_hp: data.phone,
 					nik: data.nip,
 					department: data.division,
 					position: data.division,
@@ -231,16 +292,22 @@ export default function ManajemenAkunPage() {
 	const handleSetPassword = async (password) => {
 		if (!createdUser) return;
 
+		setAlert({ type: "loading" });
 		try {
 			if (isUnlockInProgress) {
 				// Unlock flow
-				await api.unlockEmployee(createdUser.id, { password: password });
+				console.log("[Unlock] Calling reset-password for ID:", createdUser.id);
+				const resp = await api.resetEmployeePassword(createdUser.id, {
+					password: password,
+					new_password: password,
+					confirm_password: password,
+				});
+				console.log("[Unlock] API Response:", resp);
 
 				setAlert({
 					type: "success",
-					message: `Akun ${createdUser.name} berhasil diaktifkan kembali dengan password baru.`,
+					message: `Akun ${createdUser.name} berhasil diaktifkan kembali.`,
 				});
-				setIsUnlockInProgress(false);
 			} else {
 				// Create flow
 				const payload = {
@@ -248,7 +315,9 @@ export default function ManajemenAkunPage() {
 					password: password,
 				};
 
-				await api.createEmployee(payload);
+				console.log("[Create Employee Payload]:", payload);
+				const resp = await api.createEmployee(payload);
+				console.log("[Create Employee API Response]:", resp);
 
 				setAlert({
 					type: "success",
@@ -258,6 +327,7 @@ export default function ManajemenAkunPage() {
 
 			setIsPasswordModalOpen(false);
 			setCreatedUser(null);
+			setIsUnlockInProgress(false);
 			fetchEmployees();
 		} catch (error) {
 			const msg = error.response?.data?.message || error.message;
@@ -289,7 +359,6 @@ export default function ManajemenAkunPage() {
 						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
 							<Alert
 								variant={alert.type}
-								title={alert.type === "success" ? "Berhasil" : "Gagal"}
 								onClose={() => setAlert(null)}
 								message={alert.message}
 							/>
@@ -307,14 +376,33 @@ export default function ManajemenAkunPage() {
 				</div>
 
 				<div className="space-y-4">
-					<div className="flex justify-between items-center">
+					<div className="flex justify-between items-center sm:flex-row flex-col gap-4">
 						<h3 className="text-gray-600 font-medium text-lg">
 							Manajemen akun karyawan
 						</h3>
 					</div>
 
 					<div>
-						<Table columns={columns} data={users} />
+						{loading && (
+							<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+								<Alert
+									variant="loading"
+									title="Memuat Data Akun..."
+									shadow={true}
+								/>
+							</div>
+						)}
+
+						<Table
+							columns={columns}
+							data={users}
+							manual={true}
+							totalCount={totalCount}
+							currentPage={params.page}
+							pageSize={params.limit}
+							search={params.search}
+							onParamsChange={handleParamsChange}
+						/>
 					</div>
 				</div>
 
@@ -365,7 +453,7 @@ export default function ManajemenAkunPage() {
 						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-center">
 							<Alert
 								variant="question"
-								title="Apakah anda yakin ingin menjadi aktif akun ini?"
+								title="Apakah anda yakin ingin mengaktifkan akun ini?"
 								buttonText="Lanjut"
 								cancelText="Batal"
 								onConfirm={confirmUnlock}
@@ -373,8 +461,7 @@ export default function ManajemenAkunPage() {
 								btnConfirmVariant="info"
 								btnCancelVariant="danger"
 							>
-								Merubah akun menjadi aktif akan menyebabkan password pada user
-								akan berganti
+								Mengaktifkan akun akan mereset password user secara otomatis.
 							</Alert>
 						</div>,
 						document.body,
@@ -503,6 +590,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.name}
 						onChange={handleChange}
 						className={getInputClass(errors.name)}
+						disabled={isEdit && initialData.status === "active"}
 						placeholder="Tomi darvito"
 					/>
 					{errors.name && (
@@ -519,6 +607,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.email}
 						onChange={handleChange}
 						className={getInputClass(errors.email)}
+						disabled={isEdit && initialData.status === "active"}
 						placeholder="Tomi@gmail.com"
 					/>
 					{errors.email && (
@@ -534,6 +623,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.phone}
 						onChange={handleChange}
 						className={getInputClass(errors.phone)}
+						disabled={isEdit && initialData.status === "active"}
 						placeholder="08123456789"
 					/>
 					{errors.phone && (
@@ -549,6 +639,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.nip}
 						onChange={handleChange}
 						className={getInputClass(errors.nip)}
+						disabled={isEdit && initialData.status === "active"}
 						placeholder="98237443"
 					/>
 					{errors.nip && (

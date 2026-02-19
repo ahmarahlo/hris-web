@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Layout, Table } from "../../lib/components";
+import { Layout, Table, Alert } from "../../lib/components";
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import { api } from "../../lib/api";
+import { LOADING_DELAY } from "../../lib/constants";
 
 export default function ManajemenAbsensiPage() {
 	const [attendanceData, setAttendanceData] = useState([]);
@@ -12,8 +13,16 @@ export default function ManajemenAbsensiPage() {
 	}, []);
 
 	const fetchData = async () => {
+		setLoading(true);
 		try {
-			const attendance = await api.getDashboardAttendance();
+			const minDelay = new Promise((resolve) =>
+				setTimeout(resolve, LOADING_DELAY),
+			);
+
+			const [attendance] = await Promise.all([
+				api.getDashboardAttendance(),
+				minDelay,
+			]);
 
 			const mapped = (Array.isArray(attendance) ? attendance : []).map(
 				(item, i) => ({
@@ -49,10 +58,11 @@ export default function ManajemenAbsensiPage() {
 	};
 
 	const formatTime = (timeStr) => {
-		if (!timeStr) return "-";
+		if (!timeStr || timeStr === "-") return "-";
 		try {
 			if (timeStr.includes("T") || timeStr.includes("-")) {
 				const d = new Date(timeStr);
+				if (isNaN(d.getTime())) return "-";
 				return d
 					.toLocaleTimeString("id-ID", {
 						hour: "2-digit",
@@ -61,20 +71,29 @@ export default function ManajemenAbsensiPage() {
 					})
 					.replace(":", ".");
 			}
+			// Handle HH:mm:ss or HH:mm
+			const parts = timeStr.split(":");
+			if (parts.length >= 2) {
+				return `${parts[0].padStart(2, "0")}.${parts[1].padStart(2, "0")}`;
+			}
 			return timeStr.replace(":", ".");
 		} catch {
-			return timeStr;
+			return "-";
 		}
 	};
 
-	const isEarlyLeave = (timeStr) => {
-		if (!timeStr || timeStr === "-") return false;
-		const time = parseFloat(timeStr.replace(":", "."));
-		return time < 17.0;
+	const isEarlyLeave = (formattedTime) => {
+		if (!formattedTime || formattedTime === "-") return false;
+		try {
+			const [hour] = formattedTime.split(".").map(Number);
+			return hour < 17;
+		} catch {
+			return false;
+		}
 	};
 
 	const columns = [
-		{ header: "No", accessor: "no" },
+		{ header: "No", accessor: "no", className: "w-16" },
 		{ header: "Nama karyawan", accessor: "name" },
 		{ header: "NIP", accessor: "nip" },
 		{
@@ -94,12 +113,19 @@ export default function ManajemenAbsensiPage() {
 			accessor: "division",
 		},
 		{
-			header: "Clock Out",
+			header: "Jam Masuk",
+			accessor: "clockIn",
+			render: (row) => (
+				<span className="text-success-600 font-medium">{row.clockIn}</span>
+			),
+		},
+		{
+			header: "Jam Pulang",
 			accessor: "clockOut",
 			render: (row) => (
 				<span
 					className={
-						isEarlyLeave(row.clockOut) ? "text-danger font-medium" : ""
+						isEarlyLeave(row.clockOut) ? "text-danger font-medium" : "text-info"
 					}
 				>
 					{row.clockOut}
@@ -111,6 +137,16 @@ export default function ManajemenAbsensiPage() {
 	return (
 		<Layout activeMenu="Manajemen absensi" title="Manajemen absensi">
 			<div className="p-8 space-y-8 w-full">
+				{loading && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+						<Alert
+							variant="loading"
+							title="Memuat Data Absensi..."
+							shadow={true}
+						/>
+					</div>
+				)}
+
 				<div className="space-y-4">
 					<div className="flex justify-start">
 						<h3 className="text-gray-600 font-medium text-lg">

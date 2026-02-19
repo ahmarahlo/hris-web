@@ -6,7 +6,7 @@ import questionGif from "../../../assets/question.gif";
 import loadingGif from "../../../assets/loading.gif";
 
 const BASE_STYLES =
-	"flex flex-col items-center bg-white p-8 rounded-3xl w-full max-w-[480px] mx-auto text-center border border-gray-100";
+	"flex flex-col items-center bg-white p-6 rounded-3xl w-[300px] min-h-[250px] mx-auto text-center border border-gray-100 justify-center";
 
 const ALERT_VARIANTS = {
 	success: {
@@ -60,7 +60,7 @@ export function Alert({
 			className={`${BASE_STYLES} ${shadow ? "shadow-xl" : ""} ${className}`}
 			{...props}
 		>
-			{onClose && (
+			{onClose && variant !== "question" && variant !== "loading" && (
 				<button
 					onClick={onClose}
 					className="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-danger active:scale-95 transition-all duration-200"
@@ -68,18 +68,18 @@ export function Alert({
 					<XMarkIcon className="h-6 w-6" />
 				</button>
 			)}
-			<div className="mb-6">
+			<div className="mb-4">
 				<img
 					src={config.img}
 					alt={`Status ${variant}`}
-					className="h-28 w-28 object-contain"
+					className="h-20 w-20 object-contain"
 				/>
 			</div>
-			<h2 className="text-2xl font-bold text-gray-800 mb-4">
+			<h2 className="text-xl font-bold text-gray-800 mb-2">
 				{title || config.defaultTitle}
 			</h2>
 			{(message || children) && (
-				<p className="text-gray-600 mb-8 mx-auto">{message || children}</p>
+				<p className="text-gray-600 mb-6 mx-auto">{message || children}</p>
 			)}
 			{!shouldHideButtons && (
 				<div className="w-full">

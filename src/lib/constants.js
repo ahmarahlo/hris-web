@@ -6,6 +6,8 @@ export const API_CONFIG = {
 	TIMEOUT: 10000, // 10 detik
 };
 
+export const LOADING_DELAY = 500; // Durasi minimal loading dalam ms
+
 export const API_KEY = "hris-api-key-123";
 
 export const ENDPOINTS = {
@@ -18,12 +20,10 @@ export const ENDPOINTS = {
 		CLOCK_IN: "/attendance/clock-in",
 		CLOCK_OUT: "/attendance/clock-out",
 		HISTORY: "/attendance/history",
-		TODAY: "/attendance/history",
 	},
 	LEAVES: {
 		LIST: "/leaves/history",
 		CREATE: "/leaves",
-		DETAIL: (id) => `/leaves/${id}`,
 	},
 	DASHBOARD: {
 		STATS: "/dashboard",
@@ -36,7 +36,6 @@ export const ENDPOINTS = {
 		EMPLOYEES: "/dashboard/employees",
 		EMPLOYEE_DETAIL: (id) => `/dashboard/employees/${id}`,
 		RESET_PASSWORD: (id) => `/dashboard/employees/${id}/reset-password`,
-		UNLOCK: (id) => `/dashboard/employees/${id}/unlock`,
 	},
 };
 

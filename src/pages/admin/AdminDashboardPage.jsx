@@ -12,6 +12,7 @@ import { FunnelIcon } from "@heroicons/react/24/solid";
 import { XCircleIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/AuthContext";
+import { LOADING_DELAY } from "../../lib/constants";
 
 export default function AdminDashboardPage() {
 	const { user } = useAuth();
@@ -27,11 +28,17 @@ export default function AdminDashboardPage() {
 	}, []);
 
 	const fetchData = async () => {
+		setLoading(true);
 		try {
+			const minDelay = new Promise((resolve) =>
+				setTimeout(resolve, LOADING_DELAY),
+			);
+
 			const [dashStats, pending, attendance] = await Promise.all([
 				api.getDashboardStats(),
 				api.getDashboardPendingLeaves(),
 				api.getDashboardAttendanceToday(),
+				minDelay,
 			]);
 
 			setStats([
@@ -78,7 +85,7 @@ export default function AdminDashboardPage() {
 			// Map pending leaves
 			const mappedPending = (Array.isArray(pending) ? pending : []).map(
 				(item, i) => ({
-					id: item.id || item.no,
+					id: item.id,
 					no: i + 1,
 					name: item.full_name || item.employee_name || item.name || "-",
 					date: formatDateRange(item.start_date, item.end_date),
@@ -133,10 +140,11 @@ export default function AdminDashboardPage() {
 	};
 
 	const formatTime = (timeStr) => {
-		if (!timeStr) return "-";
+		if (!timeStr || timeStr === "-") return "-";
 		try {
 			if (timeStr.includes("T") || timeStr.includes("-")) {
 				const d = new Date(timeStr);
+				if (isNaN(d.getTime())) return "-";
 				return d
 					.toLocaleTimeString("id-ID", {
 						hour: "2-digit",
@@ -145,9 +153,14 @@ export default function AdminDashboardPage() {
 					})
 					.replace(":", ".");
 			}
+			// Handle HH:mm:ss or HH:mm
+			const parts = timeStr.split(":");
+			if (parts.length >= 2) {
+				return `${parts[0].padStart(2, "0")}.${parts[1].padStart(2, "0")}`;
+			}
 			return timeStr.replace(":", ".");
 		} catch {
-			return timeStr;
+			return "-";
 		}
 	};
 
@@ -158,6 +171,7 @@ export default function AdminDashboardPage() {
 			userId: user?.id,
 		});
 		setProcessingId(id);
+		setAlert({ type: "loading" });
 		try {
 			await api.processLeave(id, {
 				note: "",
@@ -180,14 +194,18 @@ export default function AdminDashboardPage() {
 		}
 	};
 
-	const isEarlyLeave = (timeStr) => {
-		if (!timeStr || timeStr === "-") return false;
-		const time = parseFloat(timeStr.replace(":", "."));
-		return time < 17.0;
+	const isEarlyLeave = (formattedTime) => {
+		if (!formattedTime || formattedTime === "-") return false;
+		try {
+			const [hour] = formattedTime.split(".").map(Number);
+			return hour < 17;
+		} catch {
+			return false;
+		}
 	};
 
 	const pendingLeaveColumns = [
-		{ header: "No", accessor: "no" },
+		{ header: "No", accessor: "no", className: "w-16" },
 		{ header: "Nama karyawan", accessor: "name" },
 		{
 			header: (
@@ -197,7 +215,16 @@ export default function AdminDashboardPage() {
 			),
 			accessor: "date",
 		},
-		{ header: "Alasan", accessor: "reason" },
+		{
+			header: "Alasan",
+			accessor: "reason",
+			className: "min-w-[200px] max-w-[300px]",
+			render: (row) => (
+				<div className="text-left line-clamp-2" title={row.reason}>
+					{row.reason}
+				</div>
+			),
+		},
 		{ header: "Catatan HR", accessor: "hrNote" },
 		{
 			header: (
@@ -236,7 +263,7 @@ export default function AdminDashboardPage() {
 	];
 
 	const attendanceColumns = [
-		{ header: "No", accessor: "no" },
+		{ header: "No", accessor: "no", className: "w-16" },
 		{ header: "Nama karyawan", accessor: "name" },
 		{ header: "NIP", accessor: "nip" },
 		{
@@ -255,14 +282,20 @@ export default function AdminDashboardPage() {
 			),
 			accessor: "division",
 		},
-		{ header: "Clock In", accessor: "clockIn" },
+		{
+			header: "Clock In",
+			accessor: "clockIn",
+			render: (row) => (
+				<span className="text-success-600 font-medium">{row.clockIn}</span>
+			),
+		},
 		{
 			header: "Clock Out",
 			accessor: "clockOut",
 			render: (row) => (
 				<span
 					className={
-						isEarlyLeave(row.clockOut) ? "text-danger font-medium" : ""
+						isEarlyLeave(row.clockOut) ? "text-danger font-medium" : "text-info"
 					}
 				>
 					{row.clockOut}
@@ -280,7 +313,6 @@ export default function AdminDashboardPage() {
 						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
 							<Alert
 								variant={alert.type}
-								title={alert.type === "success" ? "Berhasil" : "Gagal"}
 								message={alert.message}
 								onClose={() => setAlert(null)}
 							/>
@@ -288,39 +320,51 @@ export default function AdminDashboardPage() {
 						document.body,
 					)}
 
-				{/* Stats Cards */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-					{stats.map((stat, index) => (
-						<StatsCard
-							key={index}
-							title={stat.title}
-							value={stat.value}
-							variant={stat.variant}
+				{loading && (
+					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+						<Alert
+							variant="loading"
+							title="Memuat Dashboard..."
+							shadow={true}
 						/>
-					))}
-				</div>
+					</div>
+				)}
 
-				{/* Pending Cuti Table */}
-				<div className="space-y-4">
-					<div className="flex justify-start">
-						<h3 className="text-gray-600 font-medium text-lg">
-							Pengajuan cuti pending
-						</h3>
+				<div className="space-y-8">
+					{/* Stats Cards */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+						{stats.map((stat, index) => (
+							<StatsCard
+								key={index}
+								title={stat.title}
+								value={stat.value}
+								variant={stat.variant}
+							/>
+						))}
 					</div>
-					<div>
-						<Table columns={pendingLeaveColumns} data={pendingLeaveData} />
-					</div>
-				</div>
 
-				{/* Absensi Hari Ini Table */}
-				<div className="space-y-4">
-					<div className="flex justify-start">
-						<h3 className="text-gray-600 font-medium text-lg">
-							Absensi hari ini
-						</h3>
+					{/* Pending Cuti Table */}
+					<div className="space-y-4">
+						<div className="flex justify-start">
+							<h3 className="text-gray-600 font-medium text-lg">
+								Pengajuan cuti pending
+							</h3>
+						</div>
+						<div>
+							<Table columns={pendingLeaveColumns} data={pendingLeaveData} />
+						</div>
 					</div>
-					<div>
-						<Table columns={attendanceColumns} data={attendanceData} />
+
+					{/* Absensi Hari Ini Table */}
+					<div className="space-y-4">
+						<div className="flex justify-start">
+							<h3 className="text-gray-600 font-medium text-lg">
+								Absensi hari ini
+							</h3>
+						</div>
+						<div>
+							<Table columns={attendanceColumns} data={attendanceData} />
+						</div>
 					</div>
 				</div>
 			</div>

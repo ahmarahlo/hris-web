@@ -4,12 +4,15 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 export function DatePicker({ value, onChange, onClose, minDate }) {
 	const [currentDate, setCurrentDate] = useState(new Date());
 
-	// Initialize calendar with value or current date
+	// Initialize calendar with value, minDate, or current date
 	useEffect(() => {
 		if (value) {
 			setCurrentDate(new Date(value));
+		} else if (minDate && new Date(minDate) > new Date()) {
+			// If no value but minDate is provided (and in future), start there
+			setCurrentDate(new Date(minDate));
 		}
-	}, [value]);
+	}, [value, minDate]);
 
 	const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 	const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
