@@ -168,7 +168,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }) {
 			</Modal>
 			{status === "success" &&
 				createPortal(
-					<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-1000 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 						<Alert
 							variant="success"
 							title="Berhasil!"
