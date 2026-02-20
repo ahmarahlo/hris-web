@@ -132,8 +132,14 @@ export default function ManajemenCutiPage() {
 				name: item.full_name || item.employee_name || item.name || "-",
 				date: formatDateRange(item.start_date, item.end_date),
 				reason: item.reason || "-",
-				hrNote: item.hr_note || item.note || "",
+				hrNote:
+					item.hr_note ||
+					item.note ||
+					item.admin_note ||
+					item.rejection_note ||
+					"",
 				status: item.status || "pending",
+				duration: calculateDuration(item.start_date, item.end_date),
 				approver:
 					item.approved_by_name || item.approved_by || item.approver || "",
 			}));
@@ -165,6 +171,14 @@ export default function ManajemenCutiPage() {
 		const s = formatDate(start);
 		const e = formatDate(end);
 		return s === e ? s : `${s} - ${e}`;
+	};
+	const calculateDuration = (start, end) => {
+		if (!start || !end) return 0;
+		const s = new Date(start);
+		const e = new Date(end);
+		const diffTime = Math.abs(e - s);
+		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+		return diffDays;
 	};
 
 	const handleProcessLeave = (row, status) => {
@@ -256,7 +270,17 @@ export default function ManajemenCutiPage() {
 				</div>
 			),
 		},
-		{ header: "Catatan HR", accessor: "hrNote" },
+		{
+			header: "Catatan HR",
+			accessor: "hrNote",
+			render: (row) => (
+				<div
+					className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
+				>
+					{row.hrNote || "-"}
+				</div>
+			),
+		},
 		{
 			header: "Status",
 			accessor: "status",
@@ -284,6 +308,13 @@ export default function ManajemenCutiPage() {
 			},
 		},
 		{ header: "User approve", accessor: "approver" },
+		{
+			header: "Durasi",
+			accessor: "duration",
+			render: (row) => (
+				<span className="font-medium text-gray-700">{row.duration} Hari</span>
+			),
+		},
 		{
 			header: "Action",
 			accessor: "action",

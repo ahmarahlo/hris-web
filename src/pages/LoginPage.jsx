@@ -28,7 +28,7 @@ export default function LoginPage() {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [oldPassword, setOldPassword] = useState("");
 
-	const { login } = useAuth();
+	const { login, updateMe } = useAuth();
 	const navigate = useNavigate();
 
 	const handleChange = (e) => {
@@ -56,7 +56,10 @@ export default function LoginPage() {
 		try {
 			const data = await login(formData.email, formData.password);
 
-			if (data.isNewUser) {
+			// Cek apakah user sudah pernah skip/ganti password di browser ini
+			const hasSeenWelcome = localStorage.getItem(`seen_welcome_${data.id}`);
+
+			if (data.isNewUser && !hasSeenWelcome) {
 				setIsWelcomeAlertOpen(true);
 				return;
 			}
@@ -98,8 +101,18 @@ export default function LoginPage() {
 		setIsResetPasswordModalOpen(true);
 	};
 
-	const handleWelcomeCancel = () => {
+	const handleWelcomeCancel = async () => {
 		setIsWelcomeAlertOpen(false);
+		try {
+			// Simpan di localStorage buat backup (supaya user gak keganggu lagi)
+			localStorage.setItem(`seen_welcome_${user?.id}`, "true");
+			updateMe({ isNewUser: false });
+
+			// Coba tembak API (pake POST)
+			await api.updateProfile({ is_new_employee: 0 });
+		} catch (err) {
+			console.error("API update failed, but status saved locally:", err);
+		}
 		navigate("/dashboard");
 	};
 
@@ -125,6 +138,14 @@ export default function LoginPage() {
 				newPassword,
 				confirmPassword,
 			});
+			// Juga update flag is_new_employee via localStorage & API
+			localStorage.setItem(`seen_welcome_${user?.id}`, "true");
+			try {
+				await api.updateProfile({ is_new_employee: 0 });
+			} catch (e) {
+				console.warn("Failed to update flag on server after password change");
+			}
+			updateMe({ isNewUser: false });
 			setPasswordAlert({
 				type: "success",
 				message: "Password berhasil diubah, silakan masuk ke dashboard.",

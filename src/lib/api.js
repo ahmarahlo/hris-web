@@ -116,6 +116,12 @@ export const api = {
 		return response.data;
 	},
 
+	updateProfile: async (data) => {
+		// Kita coba POST karena PUT tadi 404
+		const response = await apiClient.post(ENDPOINTS.AUTH.ME, data);
+		return response.data;
+	},
+
 	/** Mengambil profil user yang sedang login (termasuk sisa cuti). */
 	getMe: async () => {
 		const response = await apiClient.get(ENDPOINTS.AUTH.ME);

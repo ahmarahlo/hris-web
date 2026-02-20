@@ -41,6 +41,15 @@ const formatDateIndo = (dateString) => {
 	});
 };
 
+const calculateDays = (start, end) => {
+	if (!start || !end) return 0;
+	const s = new Date(start);
+	const e = new Date(end);
+	const diffTime = Math.abs(e - s);
+	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+	return diffDays;
+};
+
 export default function DashboardPage() {
 	const { user } = useAuth();
 	const navigate = useNavigate();
@@ -72,12 +81,24 @@ export default function DashboardPage() {
 						new Promise((resolve) => setTimeout(resolve, LOADING_DELAY)),
 					]);
 
+				const totalLeaveDays = leaves
+					.filter((l) => l.status !== "rejected")
+					.reduce(
+						(sum, l) =>
+							sum +
+							calculateDays(
+								l.startDate || l.start_date,
+								l.endDate || l.end_date,
+							),
+						0,
+					);
+
 				setStats({
 					attendanceToday,
 					leaves,
 					attendanceHistory,
-					leaveBalance: userData.leaveBalance,
-					totalLeaves: leaves.length,
+					leaveBalance: userData.leaveBalance || userData.leave_balance || 0,
+					totalLeaves: totalLeaveDays,
 				});
 			} catch (error) {
 				console.error("Error fetching dashboard data:", error);
@@ -230,11 +251,20 @@ export default function DashboardPage() {
 
 	const cutiData = stats.leaves.map((item, index) => ({
 		no: index + 1,
-		dateRange: `${formatDateIndo(item.startDate)} - ${formatDateIndo(item.endDate)}`,
+		dateRange: `${formatDateIndo(item.startDate || item.start_date)} - ${formatDateIndo(item.endDate || item.end_date)}`,
 		reason: item.reason,
-		hrNote: item.notes || item.hrNote || "-",
-		approver: item.approver || "-",
+		hrNote:
+			item.hr_note ||
+			item.note ||
+			item.admin_note ||
+			item.rejection_note ||
+			"-",
+		approver: item.approved_by_name || item.approved_by || item.approver || "-",
 		status: item.status,
+		duration: calculateDays(
+			item.startDate || item.start_date,
+			item.endDate || item.end_date,
+		),
 	}));
 
 	// --- Columns Definition ---
@@ -277,8 +307,25 @@ export default function DashboardPage() {
 				</div>
 			),
 		},
-		{ header: "Catatan HR", accessor: "hrNote" },
+		{
+			header: "Catatan HR",
+			accessor: "hrNote",
+			render: (row) => (
+				<div
+					className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
+				>
+					{row.hrNote || "-"}
+				</div>
+			),
+		},
 		{ header: "User approve", accessor: "approver" },
+		{
+			header: "Durasi",
+			accessor: "duration",
+			render: (row) => (
+				<span className="font-medium text-gray-700">{row.duration} Hari</span>
+			),
+		},
 		{
 			header: "Status cuti",
 			accessor: "status",

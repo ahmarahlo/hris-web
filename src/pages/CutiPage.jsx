@@ -20,6 +20,7 @@ export default function CutiPage() {
 	// Submit flow: null | "loading" | "success" | "error"
 	const [submitStep, setSubmitStep] = useState(null);
 	const [submitError, setSubmitError] = useState("");
+	const [errors, setErrors] = useState({});
 
 	useEffect(() => {
 		fetchData();
@@ -66,6 +67,14 @@ export default function CutiPage() {
 			year: "numeric",
 		});
 	};
+	const calculateDuration = (start, end) => {
+		if (!start || !end) return 0;
+		const s = new Date(start);
+		const e = new Date(end);
+		const diffTime = Math.abs(e - s);
+		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+		return diffDays;
+	};
 
 	const checkOverlap = (start, end) => {
 		const newStart = new Date(start);
@@ -98,20 +107,37 @@ export default function CutiPage() {
 				updated.endDate = null;
 			}
 
+			// Hapus error saat input berubah
+			if (errors[field]) {
+				setErrors((e) => ({ ...e, [field]: "" }));
+			}
+
 			return updated;
 		});
 	};
 
 	const handleSubmit = async () => {
-		if (!formData.startDate || !formData.endDate || !formData.reason.trim()) {
-			setSubmitError("Semua field wajib diisi!");
-			setSubmitStep("error");
+		const newErrors = {};
+		if (!formData.startDate) newErrors.startDate = "Tanggal mulai wajib diisi";
+		if (!formData.endDate) newErrors.endDate = "Tanggal selesai wajib diisi";
+		if (!formData.reason.trim()) newErrors.reason = "Alasan cuti wajib diisi";
+
+		if (Object.keys(newErrors).length > 0) {
+			setErrors(newErrors);
 			return;
 		}
 
 		if (new Date(formData.startDate) > new Date(formData.endDate)) {
+			setErrors({
+				endDate: "Tanggal selesai tidak boleh sebelum tanggal mulai",
+			});
+			return;
+		}
+
+		const duration = calculateDuration(formData.startDate, formData.endDate);
+		if (duration > leaveBalance) {
 			setSubmitError(
-				"Tanggal mulai tidak boleh lebih besar dari tanggal selesai!",
+				`Durasi cuti (${duration} hari) melebihi sisa cuti tersedia!`,
 			);
 			setSubmitStep("error");
 			return;
@@ -187,7 +213,17 @@ export default function CutiPage() {
 				</div>
 			),
 		},
-		{ header: "Catatan HR", accessor: "hrNote" },
+		{
+			header: "Catatan HR",
+			accessor: "hrNote",
+			render: (row) => (
+				<div
+					className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
+				>
+					{row.hrNote || "-"}
+				</div>
+			),
+		},
 		{ header: "User approve", accessor: "approver" },
 		{
 			header: "Status cuti",
@@ -205,6 +241,13 @@ export default function CutiPage() {
 				return <Badge variant={variant}>{label}</Badge>;
 			},
 		},
+		{
+			header: "Durasi",
+			accessor: "duration",
+			render: (row) => (
+				<span className="font-medium text-gray-700">{row.duration} Hari</span>
+			),
+		},
 	];
 
 	const pendingLeaves = leaveHistory
@@ -212,8 +255,18 @@ export default function CutiPage() {
 		.map((item, index) => ({
 			...item,
 			no: index + 1,
-			hrNote: item.hr_note || item.note || "-",
-			approver: item.approver || "-",
+			hrNote:
+				item.hr_note ||
+				item.note ||
+				item.admin_note ||
+				item.rejection_note ||
+				"-",
+			approver:
+				item.approved_by_name || item.approved_by || item.approver || "-",
+			duration: calculateDuration(
+				item.startDate || item.start_date,
+				item.endDate || item.end_date,
+			),
 		}));
 
 	const approvedOrRejected = leaveHistory
@@ -221,8 +274,18 @@ export default function CutiPage() {
 		.map((item, index) => ({
 			...item,
 			no: index + 1,
-			hrNote: item.hr_note || item.note || "-",
-			approver: item.approver || "-",
+			hrNote:
+				item.hr_note ||
+				item.note ||
+				item.admin_note ||
+				item.rejection_note ||
+				"-",
+			approver:
+				item.approved_by_name || item.approved_by || item.approver || "-",
+			duration: calculateDuration(
+				item.startDate || item.start_date,
+				item.endDate || item.end_date,
+			),
 		}));
 
 	return (
@@ -250,12 +313,20 @@ export default function CutiPage() {
 							<label className="text-gray-600 font-medium">
 								Tanggal mulai <span className="float-right">:</span>
 							</label>
-							<DateInput
-								value={formData.startDate}
-								onChange={(d) => handleDateSelect("startDate", d)}
-								placeholder="dd/mm/yyyy"
-								minDate={new Date()}
-							/>
+							<div className="space-y-1">
+								<DateInput
+									value={formData.startDate}
+									onChange={(d) => handleDateSelect("startDate", d)}
+									placeholder="dd/mm/yyyy"
+									minDate={new Date()}
+									hasError={!!errors.startDate}
+								/>
+								{errors.startDate && (
+									<p className="text-xs text-danger font-medium">
+										{errors.startDate}
+									</p>
+								)}
+							</div>
 						</div>
 
 						{/* Tanggal Selesai */}
@@ -263,13 +334,21 @@ export default function CutiPage() {
 							<label className="text-gray-600 font-medium">
 								Tanggal selesai <span className="float-right">:</span>
 							</label>
-							<DateInput
-								value={formData.endDate}
-								onChange={(d) => handleDateSelect("endDate", d)}
-								placeholder="dd/mm/yyyy"
-								minDate={formData.startDate || new Date()}
-								disabled={!formData.startDate}
-							/>
+							<div className="space-y-1">
+								<DateInput
+									value={formData.endDate}
+									onChange={(d) => handleDateSelect("endDate", d)}
+									placeholder="dd/mm/yyyy"
+									minDate={formData.startDate || new Date()}
+									disabled={!formData.startDate}
+									hasError={!!errors.endDate}
+								/>
+								{errors.endDate && (
+									<p className="text-xs text-danger font-medium">
+										{errors.endDate}
+									</p>
+								)}
+							</div>
 						</div>
 
 						{/* Alasan Cuti */}
@@ -277,31 +356,63 @@ export default function CutiPage() {
 							<label className="text-gray-600 font-medium mt-2">
 								Alasan cuti <span className="float-right">:</span>
 							</label>
-							<div className="w-full">
+							<div className="w-full space-y-1">
 								<textarea
 									placeholder="Input text"
 									value={formData.reason}
-									onChange={(e) =>
-										setFormData((prev) => ({ ...prev, reason: e.target.value }))
-									}
+									onChange={(e) => {
+										setFormData((prev) => ({
+											...prev,
+											reason: e.target.value,
+										}));
+										if (errors.reason)
+											setErrors((err) => ({ ...err, reason: "" }));
+									}}
 									maxLength={50}
 									className={`w-full border rounded-lg px-4 py-2 h-24 resize-none focus:outline-none bg-white text-black ${
-										formData.reason.length >= 50
+										errors.reason
 											? "border-danger focus:border-danger-700"
-											: "border-gray-300 focus:border-brand"
+											: formData.reason.length >= 50
+												? "border-danger focus:border-danger-700"
+												: "border-gray-300 focus:border-brand"
 									}`}
 								/>
-								<p
-									className={`text-xs text-right mt-1 ${
-										formData.reason.length >= 50
-											? "text-danger font-semibold"
-											: "text-gray-400"
-									}`}
-								>
-									{formData.reason.length}/50 Karakter
-								</p>
+								<div className="flex justify-between items-start">
+									<div className="flex-1">
+										{errors.reason && (
+											<p className="text-xs text-danger font-medium">
+												{errors.reason}
+											</p>
+										)}
+									</div>
+									<p
+										className={`text-xs mt-1 ${
+											formData.reason.length >= 50
+												? "text-danger font-semibold"
+												: "text-gray-400"
+										}`}
+									>
+										{formData.reason.length}/50 Karakter
+									</p>
+								</div>
 							</div>
 						</div>
+
+						{/* Total Hari Indicator */}
+						{formData.startDate && formData.endDate && (
+							<div className="grid grid-cols-[150px_1fr] items-center gap-4 animate-in fade-in slide-in-from-top-1">
+								<div></div>
+								<div className="bg-brand-50 border border-brand-100 rounded-lg px-4 py-2 flex items-center justify-between">
+									<span className="text-sm text-brand-700 font-medium">
+										Total durasi pengajuan:
+									</span>
+									<span className="text-sm font-bold text-brand-900 bg-white px-3 py-1 rounded-md shadow-sm">
+										{calculateDuration(formData.startDate, formData.endDate)}{" "}
+										Hari
+									</span>
+								</div>
+							</div>
+						)}
 
 						{/* Sisa Cuti */}
 						<div className="grid grid-cols-[150px_1fr] items-center gap-4">
@@ -324,11 +435,7 @@ export default function CutiPage() {
 								variant="primary"
 								className="px-8 bg-info"
 								onClick={handleSubmit}
-								disabled={
-									!formData.startDate ||
-									!formData.endDate ||
-									!formData.reason.trim()
-								}
+								disabled={loading}
 							>
 								Kirim
 							</Button>

@@ -10,6 +10,7 @@ export function DateInput({
 	minDate,
 	disabled = false,
 	className = "",
+	hasError = false,
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const wrapperRef = useRef(null);
@@ -56,9 +57,11 @@ export function DateInput({
 						disabled={disabled}
 						placeholder={placeholder}
 						value={formatDateDisplay(value)}
-						className={`w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-brand bg-white text-black ${
-							disabled ? "bg-gray-100 text-gray-500" : "cursor-pointer"
-						}`}
+						className={`w-full border rounded-lg px-4 py-2 focus:outline-none transition-all ${
+							hasError
+								? "border-danger focus:border-danger-700 placeholder-danger-300"
+								: "border-gray-300 focus:border-brand"
+						} ${disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-black cursor-pointer"}`}
 					/>
 					<CalendarDaysIcon className="w-5 h-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
 				</div>

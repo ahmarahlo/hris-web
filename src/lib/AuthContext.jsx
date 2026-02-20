@@ -37,36 +37,19 @@ export const AuthProvider = ({ children }) => {
 		localStorage.setItem(STORAGE_KEYS.TOKEN, responseData.token);
 		setToken(responseData.token);
 
-		// Tentukan role dari profile endpoint
+		// Gunakan data langsung dari response login (seperti di screenshot Swagger)
 		let userRole = responseData.role || "employee";
-		let profile = null;
-
-		try {
-			profile = await api.getMe();
-			console.log("[Auth] Profile data retrieved:", profile);
-			const profileRole = (profile?.role || "").toLowerCase();
-
-			if (profileRole) {
-				userRole = profileRole;
-			} else if (profile?.department === "HR") {
-				// Fallback: Department HR = Admin Role
-				userRole = "admin";
-			}
-		} catch (e) {
-			console.warn("Could not fetch profile for role detection:", e);
-		}
 
 		const userData = {
-			id: profile?.id || responseData.id,
-			name:
-				profile?.fullName ||
-				profile?.full_name ||
-				responseData.name ||
-				responseData.full_name ||
-				"User",
+			id: responseData.id || responseData.user_id,
+			name: responseData.full_name || responseData.name || "User",
 			role: userRole,
-			isNewUser: responseData.isNewUser || responseData.is_new_user || false,
-			employeeId: profile?.id,
+			isNewUser:
+				responseData.is_new_employee === true ||
+				responseData.is_new_employee === 1 ||
+				responseData.is_new_user === true ||
+				responseData.isNewUser === true ||
+				false,
 		};
 
 		console.log("[Auth] Final user data:", userData);
@@ -83,9 +66,23 @@ export const AuthProvider = ({ children }) => {
 		setUser(null);
 	};
 
+	const updateMe = (data) => {
+		const updatedUser = { ...user, ...data };
+		localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
+		setUser(updatedUser);
+	};
+
 	return (
 		<AuthContext.Provider
-			value={{ user, token, login, logout, loading, isAuthenticated: !!token }}
+			value={{
+				user,
+				token,
+				login,
+				logout,
+				updateMe,
+				loading,
+				isAuthenticated: !!token,
+			}}
 		>
 			{!loading && children}
 		</AuthContext.Provider>
