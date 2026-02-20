@@ -1,7 +1,7 @@
 import { Button } from "../button/Button";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import dismissGif from "../../../assets/dismiss.gif";
-import successGif from "../../../assets/success.gif";
+import successGif from "../../../assets/Success.gif";
 import questionGif from "../../../assets/question.gif";
 import loadingGif from "../../../assets/loading.gif";
 
