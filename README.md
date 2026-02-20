@@ -1,16 +1,74 @@
-# React + Vite
+# HRIS Mini - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistem Manajemen Sumber Daya Manusia (HRIS) Mini. Proyek ini dibangun menggunakan **React + Vite** dan **Tailwind CSS**.
 
-Currently, two official plugins are available:
+## 🚀 Panduan Instalasi (Untuk QA)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Ikuti langkah-langkah berikut untuk menjalankan proyek di perangkat lokal Anda:
 
-## React Compiler
+### 1. Prasyarat
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Pastikan Anda sudah menginstal:
 
-## Expanding the ESLint configuration
+- **Node.js** (Versi 18 ke atas)
+- **NPM** atau **PNPM**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 2. Clone Repository
+
+Buka terminal dan jalankan perintah berikut:
+
+```bash
+git clone <url-repository-anda>
+cd hris
+```
+
+### 3. Instalasi Dependency
+
+Instal semua library yang dibutuhkan:
+
+```bash
+npm install
+# atau jika menggunakan pnpm
+pnpm install
+```
+
+### 4. Konfigurasi Environment (.env)
+
+Buat file baru bernama `.env` di folder root, lalu masukkan konfigurasi berikut:
+
+```env
+VITE_API_URL=/api
+VITE_API_KEY=hris-api-key-123
+```
+
+### 5. Menjalankan Aplikasi
+
+Jalankan server pengembangan:
+
+```bash
+npm run dev
+```
+
+Setelah jalan, buka browser di alamat: `http://localhost:5173`
+
+---
+
+## 🛠️ Catatan Penting untuk QA
+
+Saat ini terdapat beberapa fitur yang sedang dalam tahap integrasi dengan Backend. Jika Anda menemukan isu berikut, hal tersebut adalah **dikarenakan limitasi Backend (bukan Bug Frontend)**:
+
+1.  **Status "Blokir" (Mode Simulasi)**: Karena data real dari Backend belum tersedia, saat ini aktif **Mode Simulasi** khusus untuk akun bernama **"Budi Pratama"**. Akun tersebut akan otomatis muncul dengan status "Blokir" agar Anda dapat mengetes fitur Unlock.
+2.  **Error 404 saat "Buka Gembok"**: Endpoint `/unlock` belum tersedia di sisi Backend. API akan tetap dipanggil namun akan menghasilkan error 404.
+3.  **Alert Login Terblokir**: Hanya akan muncul jika API Login mengembalikan pesan error yang mengandung kata "blokir" atau "locked".
+4.  **Login Role Parameter**: Saat ini login belum bisa memproses parameter `role` secara spesifik dari Backend.
+5.  **Identifikasi User Baru**: Logika untuk membedakan "User Baru" (untuk flow ganti password pertama kali) belum tersedia sepenuhnya dari sisi Backend.
+
+
+
+## 💻 Tech Stack
+
+- **Library Utama**: React 19
+- **Build Tool**: Vite 7
+- **Styling**: Tailwind CSS 4
+- **Icon**: HeroIcons
+- **HTTP Client**: Axios

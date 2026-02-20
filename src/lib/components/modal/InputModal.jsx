@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal } from "./Modal";
 import { Button } from "../button/Button";
 
-export default function InputModal({
+export function InputModal({
   isOpen,
   onClose,
   onSubmit,
