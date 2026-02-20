@@ -56,25 +56,6 @@ export function Dropdown({
                                         ${/* LOGIC PEMILIHAN STYLE ITEM */ ""}
                                         
                                         ${
-<<<<<<< HEAD
-                                          variant === "status"
-                                            ? // STYLE A: STATUS (Kotak, Warna dari data option, Teks Tengah)
-                                              `px-3 py-1.5 rounded-md font-medium text-center ${option.color || "bg-gray-100"}`
-                                            : // STYLE B: FILTER (List Putih Biasa)
-                                              "px-4 py-2 text-gray-700 hover:bg-gray-50 border-b border-gray-50 last:border-0"
-                                        }
-                                    `}
-                >
-                  {option.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-=======
 																					variant === "status"
 																						? // STYLE A: STATUS (Kotak, Warna dari data option, Teks Tengah)
 																							`px-3 py-1.5 rounded-md font-medium text-center ${option.color || "bg-gray-100"}`
@@ -93,5 +74,4 @@ export function Dropdown({
 			)}
 		</div>
 	);
->>>>>>> dev/integrasi
 }
