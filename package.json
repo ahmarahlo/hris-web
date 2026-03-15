@@ -10,10 +10,15 @@
 		"preview": "vite preview",
 		"mock": "node mock-server.cjs"
 	},
+	"overrides": {
+		"node-fetch": "^2.6.7"
+	},
 	"dependencies": {
 		"@heroicons/react": "^2.2.0",
 		"@tailwindcss/vite": "^4.1.18",
 		"axios": "^1.13.5",
+		"face-api.js": "^0.22.2",
+		"leaflet": "^1.9.4",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
 		"react-router-dom": "^7.13.0",
