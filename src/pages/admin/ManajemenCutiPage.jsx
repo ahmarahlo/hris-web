@@ -193,13 +193,13 @@ export default function ManajemenCutiPage() {
 					name: itemName,
 					isSelf: isSelfId || isSelfName,
 					date: formatDateRange(item.start_date, item.end_date),
-					reason: item.reason || "-",
+					reason: (item.reason || "-").replace(/<[^>]*>?/gm, '').trim() || "-",
 					hrNote:
-						item.hr_note ||
+						(item.hr_note ||
 						item.note ||
 						item.admin_note ||
 						item.rejection_note ||
-						"",
+						"").replace(/<[^>]*>?/gm, '').trim(),
 					status: item.status || "pending",
 					approver:
 						item.approver ||
@@ -300,7 +300,36 @@ export default function ManajemenCutiPage() {
 				note: note,
 				status: status,
 			});
-			await fetchData(true);
+			
+			// Optimistically update the UI to avoid waiting for slow backend syncs
+			setLeaveData((prev) => 
+				prev.map(item => item.id === id ? { 
+					...item, 
+					status, 
+					hrNote: note, 
+					approver: user?.name || user?.full_name || "Admin" 
+				} : item)
+			);
+			
+			setStats((prev) => prev.map(stat => {
+				const titleLower = stat.title.toLowerCase();
+				if (titleLower.includes("pending") || titleLower.includes("menunggu")) {
+					return { ...stat, value: String(Math.max(0, parseInt(stat.value) - 1)) };
+				}
+				if (status === "approved" && titleLower.includes("disetujui")) {
+					return { ...stat, value: String(parseInt(stat.value) + 1) };
+				}
+				if (status === "rejected" && titleLower.includes("ditolak")) {
+					return { ...stat, value: String(parseInt(stat.value) + 1) };
+				}
+				return stat;
+			}));
+
+			// Fetch data in background fully sync after 1.5s
+			setTimeout(() => {
+				fetchData(true);
+			}, 1500);
+
 			hideLoading();
 			setAlert({
 				type: "success",
