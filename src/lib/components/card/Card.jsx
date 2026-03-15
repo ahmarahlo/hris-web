@@ -15,7 +15,7 @@ export function Card({
 	// Jika ada children (misal untuk container generik seperti di App.jsx), kita render children saja
 	if (children) {
 		return (
-			<div className="flex-1 bg-white rounded-xl shadow-md overflow-hidden font-sans border flex flex-col h-[266]">
+			<div className="flex-1 bg-white rounded-xl shadow-md font-sans border flex flex-col min-h-[266px] overflow-hidden">
 				{children}
 			</div>
 		);
@@ -60,7 +60,7 @@ export function Card({
 	const style = config[variant] || config["absen_belum"];
 
 	return (
-		<div className="flex-1 bg-white rounded-xl shadow-md overflow-hidden font-sans border flex flex-col h-[266]">
+		<div className="flex-1 bg-white rounded-xl shadow-md font-sans border flex flex-col min-h-[266px] overflow-hidden">
 			{/* --- HEADER --- */}
 			<div className={`${style.bg} p-5 text-white`}>
 				<h3 className="font-bold text-lg leading-tight">{style.title}</h3>

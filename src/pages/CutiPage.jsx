@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Layout, Table, Badge, Button, Modal, Alert } from "../lib/components";
 import { DateInput } from "../lib/components/datepicker/DateInput";
 import { CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { api } from "../lib/api";
+import { useLoading } from "../lib/LoadingContext";
 import { LOADING_DELAY } from "../lib/constants";
 
 export default function CutiPage() {
@@ -15,7 +16,7 @@ export default function CutiPage() {
 
 	const [leaveHistory, setLeaveHistory] = useState([]);
 	const [leaveBalance, setLeaveBalance] = useState(0);
-	const [loading, setLoading] = useState(true);
+	const { showLoading, hideLoading } = useLoading();
 
 	// Submit flow: null | "loading" | "success" | "error"
 	const [submitStep, setSubmitStep] = useState(null);
@@ -27,7 +28,7 @@ export default function CutiPage() {
 	}, []);
 
 	const fetchData = async () => {
-		setLoading(true);
+		showLoading("Memuat Data Cuti...");
 		try {
 			const minDelay = new Promise((resolve) =>
 				setTimeout(resolve, LOADING_DELAY),
@@ -43,7 +44,7 @@ export default function CutiPage() {
 		} catch (error) {
 			console.error("Error fetching cuti data:", error);
 		} finally {
-			setLoading(false);
+			hideLoading();
 		}
 	};
 
@@ -67,10 +68,12 @@ export default function CutiPage() {
 			year: "numeric",
 		});
 	};
+
 	const calculateDuration = (start, end) => {
 		if (!start || !end) return 0;
 		const s = new Date(start);
 		const e = new Date(end);
+		if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
 		const diffTime = Math.abs(e - s);
 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 		return diffDays;
@@ -135,9 +138,10 @@ export default function CutiPage() {
 		}
 
 		const duration = calculateDuration(formData.startDate, formData.endDate);
-		if (duration > leaveBalance) {
+
+		if (leaveBalance < duration) {
 			setSubmitError(
-				`Durasi cuti (${duration} hari) melebihi sisa cuti tersedia!`,
+				`Durasi cuti (${duration} hari) melebihi sisa cuti tersedia (${leaveBalance} hari)!`,
 			);
 			setSubmitStep("error");
 			return;
@@ -192,63 +196,68 @@ export default function CutiPage() {
 
 	// --- Table Config ---
 
-	const columns = [
-		{ header: "No", accessor: "no", className: "w-16" },
-		{
-			header: "Tanggal cuti",
-			accessor: "dateRange",
-			render: (row) => (
-				<span>
-					{formatDateIndo(row.startDate)} - {formatDateIndo(row.endDate)}
-				</span>
-			),
-		},
-		{
-			header: "Alasan cuti",
-			accessor: "reason",
-			className: "min-w-[200px] max-w-[300px]",
-			render: (row) => (
-				<div className="text-left line-clamp-2" title={row.reason}>
-					{row.reason}
-				</div>
-			),
-		},
-		{
-			header: "Catatan HR",
-			accessor: "hrNote",
-			render: (row) => (
-				<div
-					className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
-				>
-					{row.hrNote || "-"}
-				</div>
-			),
-		},
-		{ header: "User approve", accessor: "approver" },
-		{
-			header: "Status cuti",
-			accessor: "status",
-			render: (row) => {
-				let variant = "pending";
-				let label = "Pending";
-				if (row.status === "approved") {
-					variant = "approve";
-					label = "Approve";
-				} else if (row.status === "rejected") {
-					variant = "reject";
-					label = "Reject";
-				}
-				return <Badge variant={variant}>{label}</Badge>;
+	const columns = useMemo(
+		() => [
+			{ header: "No", accessor: "no", className: "w-16" },
+			{
+				header: "Tanggal cuti",
+				accessor: "dateRange",
+				render: (row) => (
+					<span>
+						{formatDateIndo(row.startDate)} - {formatDateIndo(row.endDate)}
+					</span>
+				),
 			},
-		},
-		{
-			header: "Durasi",
-			accessor: "duration",
-			render: (row) => (
-				<span className="font-medium text-gray-700">{row.duration} Hari</span>
-			),
-		},
-	];
+			{
+				header: "Durasi",
+				accessor: "duration",
+				render: (row) => (
+					<span className="font-medium">
+						{calculateDuration(row.startDate, row.endDate)} Hari
+					</span>
+				),
+			},
+			{
+				header: "Alasan cuti",
+				accessor: "reason",
+				className: "min-w-[200px] max-w-[300px]",
+				render: (row) => (
+					<div className="text-left line-clamp-2" title={row.reason}>
+						{row.reason}
+					</div>
+				),
+			},
+			{
+				header: "Catatan HR",
+				accessor: "hrNote",
+				render: (row) => (
+					<div
+						className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
+					>
+						{row.hrNote || "-"}
+					</div>
+				),
+			},
+			{ header: "User approve", accessor: "approver" },
+			{
+				header: "Status cuti",
+				accessor: "status",
+				render: (row) => {
+					let variant = "pending";
+					let label = "Pending";
+					if (row.status === "approved") {
+						variant = "approve";
+						label = "Approve";
+					} else if (row.status === "rejected") {
+						variant = "reject";
+						label = "Reject";
+					}
+					return <Badge variant={variant}>{label}</Badge>;
+				},
+			},
+		],
+		[],
+	);
 
 	const pendingLeaves = leaveHistory
 		.filter((l) => l.status === "pending")
@@ -263,10 +272,6 @@ export default function CutiPage() {
 				"-",
 			approver:
 				item.approved_by_name || item.approved_by || item.approver || "-",
-			duration: calculateDuration(
-				item.startDate || item.start_date,
-				item.endDate || item.end_date,
-			),
 		}));
 
 	const approvedOrRejected = leaveHistory
@@ -282,25 +287,24 @@ export default function CutiPage() {
 				"-",
 			approver:
 				item.approved_by_name || item.approved_by || item.approver || "-",
-			duration: calculateDuration(
-				item.startDate || item.start_date,
-				item.endDate || item.end_date,
-			),
 		}));
+
+	// --- Memoized Values ---
+	const bookedDates = leaveHistory
+		.filter((l) => l.status !== "rejected")
+		.reduce((acc, l) => {
+			let current = new Date(l.startDate);
+			const end = new Date(l.endDate);
+			while (current <= end) {
+				acc.push(new Date(current));
+				current.setDate(current.getDate() + 1);
+			}
+			return acc;
+		}, []);
 
 	return (
 		<Layout activeMenu="Pengajuan Cuti" title="Pengajuan cuti">
-			<div className="p-8 space-y-8 max-w-5xl w-full">
-				{loading && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-						<Alert
-							variant="loading"
-							title="Memuat Data Cuti..."
-							shadow={true}
-						/>
-					</div>
-				)}
-
+			<div className="lg:p-8 p-4 space-y-8 w-full">
 				{/* Form Pengajuan Cuti */}
 				<div className="bg-white p-6 rounded-lg space-y-6">
 					<h2 className="text-xl font-semibold text-gray-800 border-b border-gray-100 pb-4">
@@ -319,6 +323,7 @@ export default function CutiPage() {
 									onChange={(d) => handleDateSelect("startDate", d)}
 									placeholder="dd/mm/yyyy"
 									minDate={new Date()}
+									disabledDates={bookedDates}
 									hasError={!!errors.startDate}
 								/>
 								{errors.startDate && (
@@ -341,6 +346,7 @@ export default function CutiPage() {
 									placeholder="dd/mm/yyyy"
 									minDate={formData.startDate || new Date()}
 									disabled={!formData.startDate}
+									disabledDates={bookedDates}
 									hasError={!!errors.endDate}
 								/>
 								{errors.endDate && (
@@ -358,7 +364,7 @@ export default function CutiPage() {
 							</label>
 							<div className="w-full space-y-1">
 								<textarea
-									placeholder="Input text"
+									placeholder="Masukkan Alasan"
 									value={formData.reason}
 									onChange={(e) => {
 										setFormData((prev) => ({
@@ -398,22 +404,6 @@ export default function CutiPage() {
 							</div>
 						</div>
 
-						{/* Total Hari Indicator */}
-						{formData.startDate && formData.endDate && (
-							<div className="grid grid-cols-[150px_1fr] items-center gap-4 animate-in fade-in slide-in-from-top-1">
-								<div></div>
-								<div className="bg-brand-50 border border-brand-100 rounded-lg px-4 py-2 flex items-center justify-between">
-									<span className="text-sm text-brand-700 font-medium">
-										Total durasi pengajuan:
-									</span>
-									<span className="text-sm font-bold text-brand-900 bg-white px-3 py-1 rounded-md shadow-sm">
-										{calculateDuration(formData.startDate, formData.endDate)}{" "}
-										Hari
-									</span>
-								</div>
-							</div>
-						)}
-
 						{/* Sisa Cuti */}
 						<div className="grid grid-cols-[150px_1fr] items-center gap-4">
 							<label className="text-gray-600 font-medium">
@@ -423,9 +413,19 @@ export default function CutiPage() {
 								<input
 									type="text"
 									disabled
-									value={loading ? "..." : leaveBalance}
+									value={leaveBalance}
 									className="w-full bg-gray-200 border border-gray-300 rounded-lg px-4 py-2 text-gray-600 cursor-not-allowed"
 								/>
+							</div>
+						</div>
+
+						{/* Total Hari Indicator */}
+						<div className="grid grid-cols-[150px_1fr] items-center gap-4">
+							<label className="text-gray-600 font-medium">
+								Total hari <span className="float-right">:</span>
+							</label>
+							<div className="bg-info-50 text-info font-bold px-4 py-2 rounded-lg border border-info-200 inline-block w-fit">
+								{calculateDuration(formData.startDate, formData.endDate)} Hari
 							</div>
 						</div>
 
@@ -435,7 +435,6 @@ export default function CutiPage() {
 								variant="primary"
 								className="px-8 bg-info"
 								onClick={handleSubmit}
-								disabled={loading}
 							>
 								Kirim
 							</Button>
@@ -449,11 +448,7 @@ export default function CutiPage() {
 						Pengajuan cuti pending
 					</h3>
 					<div className="bg-white rounded-lg overflow-hidden">
-						{loading ? (
-							<p className="p-4 text-gray-400 text-center">Memuat data...</p>
-						) : (
-							<Table columns={columns} data={pendingLeaves} />
-						)}
+						<Table columns={columns} data={pendingLeaves} />
 					</div>
 				</div>
 
@@ -463,18 +458,14 @@ export default function CutiPage() {
 						<h3 className="text-lg font-bold text-gray-700">Riwayat cuti</h3>
 					</div>
 					<div className="bg-white rounded-lg overflow-hidden">
-						{loading ? (
-							<p className="p-4 text-gray-400 text-center">Memuat data...</p>
-						) : (
-							<Table columns={columns} data={approvedOrRejected} />
-						)}
+						<Table columns={columns} data={approvedOrRejected} />
 					</div>
 				</div>
 			</div>
 
 			{submitStep === "loading" &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
 						<Alert
 							variant="loading"
 							title="Mohon Menunggu..."
@@ -487,7 +478,7 @@ export default function CutiPage() {
 
 			{submitStep === "success" &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
 						<Alert
 							variant="success"
 							title="Pengajuan Cuti Berhasil!"
@@ -501,12 +492,13 @@ export default function CutiPage() {
 
 			{submitStep === "error" &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
 						<Alert
 							variant="error"
 							title={submitError || "Gagal mengajukan cuti"}
 							shadow={false}
 							onClose={() => setSubmitStep(null)}
+							showCloseIcon={false}
 						/>
 					</div>,
 					document.body,

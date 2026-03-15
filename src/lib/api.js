@@ -92,6 +92,21 @@ const extractArray = (data, label = "API") => {
 	return [];
 };
 
+/** Mengekstrak paginated data (array + total count) dari response API. */
+const extractPaginatedResponse = (data, label = "API") => {
+	const arr = extractArray(data, label);
+	// Handle various total count keys from different backend formats
+	const total =
+		data?.total ??
+		data?.total_count ??
+		data?.totalCount ??
+		data?.data?.total ??
+		data?.data?.total_count ??
+		arr.length;
+
+	return { data: arr, total };
+};
+
 // ==========================================
 // API METHODS
 // ==========================================
@@ -116,9 +131,21 @@ export const api = {
 		return response.data;
 	},
 
+	/** Menandai bahwa karyawan baru sudah melihat/menangani notifikasi akun baru. */
+	markNewEmployeeAsSeen: async () => {
+		try {
+			// Endpoint sesuai Swagger: PATCH /auth/new-employee
+			const response = await apiClient.patch("/auth/new-employee");
+			return response.data;
+		} catch (error) {
+			console.warn("[api.markNewEmployeeAsSeen] Failed:", error.message);
+			// Tidak di-throw agar proses login tidak terganggu
+			return null;
+		}
+	},
+
 	updateProfile: async (data) => {
-		// Kita coba POST karena PUT tadi 404
-		const response = await apiClient.post(ENDPOINTS.AUTH.ME, data);
+		const response = await apiClient.put(ENDPOINTS.AUTH.ME, data);
 		return response.data;
 	},
 
@@ -126,6 +153,29 @@ export const api = {
 	getMe: async () => {
 		const response = await apiClient.get(ENDPOINTS.AUTH.ME);
 		const profileData = response.data?.data || response.data;
+		console.log("[api.getMe] Raw profileData:", profileData);
+		console.log(
+			"[api.getMe] is_new_employee value:",
+			profileData?.is_new_employee,
+			"| type:",
+			typeof profileData?.is_new_employee,
+		);
+
+		// Helper untuk deteksi isNewUser secara mendalam
+		const detectIsNew = (data) => {
+			if (!data) return false;
+			const keys = ["is_new_employee", "is_new_user", "isNewUser", "is_new"];
+			for (const key of keys) {
+				if (data[key] === true || Number(data[key]) === 1) return true;
+			}
+			const nested = data.user || data.employee || data.profile;
+			if (nested && typeof nested === "object") {
+				for (const key of keys) {
+					if (nested[key] === true || Number(nested[key]) === 1) return true;
+				}
+			}
+			return false;
+		};
 
 		return {
 			...profileData,
@@ -135,6 +185,7 @@ export const api = {
 			annualLeaveQuota: profileData.annual_leave_quota ?? 0,
 			fullName: profileData.full_name || profileData.fullName,
 			role: profileData.role,
+			isNewUser: detectIsNew(profileData),
 		};
 	},
 
@@ -162,14 +213,37 @@ export const api = {
 		}
 	},
 
+	/** Cek apakah user di lokasi kantor. Harus dipanggil sebelum clock-in. */
+	checkLocation: async (lat, lng) => {
+		const response = await apiClient.get(ENDPOINTS.ATTENDANCE.CHECK_LOCATION, {
+			params: { lat, lng },
+		});
+		return response.data;
+	},
+
 	/** @returns {object|null} Response data atau null jika gagal */
-	clockIn: async () => {
+	clockIn: async (photo = null) => {
 		try {
-			const response = await apiClient.post(ENDPOINTS.ATTENDANCE.CLOCK_IN);
-			return response.data;
+			const formData = new FormData();
+
+			if (photo) {
+				// Convert base64 data URL to Blob
+				const response = await fetch(photo);
+				const blob = await response.blob();
+				formData.append("photo", blob, "clock-in.jpg");
+			}
+
+			const res = await apiClient.post(
+				ENDPOINTS.ATTENDANCE.CLOCK_IN,
+				formData,
+				{
+					headers: { "Content-Type": "multipart/form-data" },
+				},
+			);
+			return res.data;
 		} catch (error) {
 			console.error("Error clocking in:", error);
-			return null;
+			throw error;
 		}
 	},
 
@@ -241,57 +315,143 @@ export const api = {
 		}
 	},
 
-	getDashboardPendingLeaves: async () => {
+	getDashboardPendingLeaves: async (params = {}) => {
 		try {
-			const response = await apiClient.get(ENDPOINTS.DASHBOARD.PENDING_LEAVES);
-			const arr = extractArray(response.data, "getDashboardPendingLeaves");
-			return arr.map((item) => ({
-				...item,
-				id:
-					item.id || item.leave_id || item.id_leave || item.id_cuti || item.no,
-			}));
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				limit: limit,
+			};
+			const response = await apiClient.get(ENDPOINTS.DASHBOARD.PENDING_LEAVES, {
+				params: apiParams,
+			});
+			const paginated = extractPaginatedResponse(
+				response.data,
+				"getDashboardPendingLeaves",
+			);
+			return {
+				...paginated,
+				data: paginated.data.map((item) => ({
+					...item,
+					id:
+						item.id ||
+						item.leave_id ||
+						item.id_leave ||
+						item.id_cuti ||
+						item.no,
+				})),
+			};
 		} catch (error) {
 			console.error("Error fetching pending leaves:", error);
-			return [];
+			return { data: [], total: 0 };
 		}
 	},
 
-	getDashboardAttendanceToday: async () => {
+	getDashboardAttendanceToday: async (params = {}) => {
 		try {
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				page_Index: page - 1,
+				page_index: page - 1,
+				offset: (page - 1) * limit,
+				limit: limit,
+				per_page: limit,
+				perPage: limit,
+				pageSize: limit,
+				page_size: limit,
+				size: limit,
+				take: limit,
+				count: limit,
+			};
 			const response = await apiClient.get(
 				ENDPOINTS.DASHBOARD.ATTENDANCE_TODAY,
+				{ params: apiParams },
 			);
-			return extractArray(response.data, "getDashboardAttendanceToday");
+			return extractPaginatedResponse(
+				response.data,
+				"getDashboardAttendanceToday",
+			);
 		} catch (error) {
 			console.error("Error fetching attendance today:", error);
-			return [];
+			return { data: [], total: 0 };
 		}
 	},
 
-	getDashboardAttendance: async () => {
+	getDashboardAttendance: async (params = {}) => {
 		try {
-			const response = await apiClient.get(ENDPOINTS.DASHBOARD.ATTENDANCE);
-			return extractArray(response.data, "getDashboardAttendance");
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				page_Index: page - 1,
+				page_index: page - 1,
+				offset: (page - 1) * limit,
+				limit: limit,
+				per_page: limit,
+				perPage: limit,
+				pageSize: limit,
+				page_size: limit,
+				size: limit,
+				take: limit,
+				count: limit,
+			};
+			const response = await apiClient.get(ENDPOINTS.ATTENDANCE.HISTORY, {
+				params: apiParams,
+			});
+			return extractPaginatedResponse(response.data, "getDashboardAttendance");
 		} catch (error) {
 			console.error("Error fetching all attendance:", error);
-			return [];
+			return { data: [], total: 0 };
 		}
 	},
 
 	getDashboardLeaves: async (params = {}) => {
 		try {
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				page_Index: page - 1,
+				page_index: page - 1,
+				offset: (page - 1) * limit,
+				limit: limit,
+				per_page: limit,
+				perPage: limit,
+				pageSize: limit,
+				page_size: limit,
+				size: limit,
+				take: limit,
+				count: limit,
+			};
 			const response = await apiClient.get(ENDPOINTS.DASHBOARD.LEAVES, {
-				params,
+				params: apiParams,
 			});
-			const arr = extractArray(response.data, "getDashboardLeaves");
-			return arr.map((item) => ({
-				...item,
-				id:
-					item.id || item.leave_id || item.id_leave || item.id_cuti || item.no,
-			}));
+			const paginated = extractPaginatedResponse(
+				response.data,
+				"getDashboardLeaves",
+			);
+			return {
+				...paginated,
+				data: paginated.data.map((item) => ({
+					...item,
+					id:
+						item.id ||
+						item.leave_id ||
+						item.id_leave ||
+						item.id_cuti ||
+						item.no,
+				})),
+			};
 		} catch (error) {
 			console.error("Error fetching all leaves:", error);
-			return [];
+			return { data: [], total: 0 };
 		}
 	},
 
@@ -315,13 +475,30 @@ export const api = {
 
 	getDashboardEmployees: async (params = {}) => {
 		try {
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				page_Index: page - 1,
+				page_index: page - 1,
+				offset: (page - 1) * limit,
+				limit: limit,
+				per_page: limit,
+				perPage: limit,
+				pageSize: limit,
+				page_size: limit,
+				size: limit,
+				take: limit,
+				count: limit,
+			};
 			const response = await apiClient.get(ENDPOINTS.DASHBOARD.EMPLOYEES, {
-				params,
+				params: apiParams,
 			});
-			return extractArray(response.data, "getDashboardEmployees");
+			return extractPaginatedResponse(response.data, "getDashboardEmployees");
 		} catch (error) {
 			console.error("Error fetching employees:", error);
-			return [];
+			return { data: [], total: 0 };
 		}
 	},
 
@@ -332,7 +509,7 @@ export const api = {
 
 	updateEmployee: async (id, data) => {
 		const response = await apiClient.put(
-			ENDPOINTS.DASHBOARD.EMPLOYEE_DETAIL(id),
+			ENDPOINTS.DASHBOARD.EMPLOYEE_UPDATE(id),
 			data,
 		);
 		return response.data;
@@ -340,7 +517,7 @@ export const api = {
 
 	deleteEmployee: async (id) => {
 		const response = await apiClient.delete(
-			ENDPOINTS.DASHBOARD.EMPLOYEE_DETAIL(id),
+			ENDPOINTS.DASHBOARD.EMPLOYEE_UPDATE(id),
 		);
 		return response.data;
 	},
@@ -358,5 +535,31 @@ export const api = {
 			ENDPOINTS.DASHBOARD.EMPLOYEE_DETAIL(id),
 		);
 		return response.data?.data || response.data;
+	},
+
+	getAdmins: async (params = {}) => {
+		try {
+			const limit = params.limit || params.pageSize || 10;
+			const page = params.page || 1;
+			const apiParams = {
+				...params,
+				page: page,
+				limit: limit,
+			};
+			const response = await apiClient.get(ENDPOINTS.DASHBOARD.ADMINS, {
+				params: apiParams,
+			});
+			return extractPaginatedResponse(response.data, "getAdmins");
+		} catch (error) {
+			console.error("Error fetching admins:", error);
+			return { data: [], total: 0 };
+		}
+	},
+
+	demoteAdmin: async (id) => {
+		const response = await apiClient.delete(
+			ENDPOINTS.DASHBOARD.ADMIN_DELETE(id),
+		);
+		return response.data;
 	},
 };

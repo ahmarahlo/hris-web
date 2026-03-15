@@ -12,7 +12,7 @@ export function Modal({
 
 	return (
 		<div>
-			<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm ">
+			<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 				<div className="bg-white rounded-xl shadow-2xl w-full max-w-[480px] overflow-hidden">
 					{!hideCloseButton && (
 						<div className="flex justify-between items-center p-4 border-b">

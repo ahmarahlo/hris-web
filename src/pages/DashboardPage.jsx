@@ -1,9 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Layout, Card, Table, Badge, Modal, Alert } from "../lib/components";
+import {
+	Layout,
+	Card,
+	Table,
+	Badge,
+	Modal,
+	Alert,
+	AlertBanner,
+	StatsCard,
+	LocationVerification,
+	FaceVerification,
+} from "../lib/components";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
+import { useLoading } from "../lib/LoadingContext";
 import { LOADING_DELAY } from "../lib/constants";
 
 // --- Helper: Format tanggal/waktu ---
@@ -21,14 +33,27 @@ const formatMonth = (dateString) => {
 };
 
 const formatTime = (timeString) => {
-	if (!timeString) return "-";
-	if (timeString.includes("T")) {
-		const date = new Date(timeString);
-		return date
-			.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-			.replace(".", ":");
+	if (!timeString || timeString === "-") return "-";
+	try {
+		if (timeString.includes("T") || timeString.includes("-")) {
+			const date = new Date(timeString);
+			if (isNaN(date.getTime())) return "-";
+			return date
+				.toLocaleTimeString("id-ID", {
+					hour: "2-digit",
+					minute: "2-digit",
+					hour12: false,
+				})
+				.replace(":", ".");
+		}
+		const parts = timeString.split(":");
+		if (parts.length >= 2) {
+			return `${parts[0].padStart(2, "0")}.${parts[1].padStart(2, "0")}`;
+		}
+		return timeString.replace(":", ".");
+	} catch {
+		return "-";
 	}
-	return timeString.substring(0, 5);
 };
 
 const formatDateIndo = (dateString) => {
@@ -41,15 +66,6 @@ const formatDateIndo = (dateString) => {
 	});
 };
 
-const calculateDays = (start, end) => {
-	if (!start || !end) return 0;
-	const s = new Date(start);
-	const e = new Date(end);
-	const diffTime = Math.abs(e - s);
-	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-	return diffDays;
-};
-
 export default function DashboardPage() {
 	const { user } = useAuth();
 	const navigate = useNavigate();
@@ -60,17 +76,22 @@ export default function DashboardPage() {
 		leaveBalance: 0,
 		totalLeaves: 0,
 	});
-	const [loading, setLoading] = useState(true);
+	const { showLoading, hideLoading } = useLoading();
 
 	// Clock Out flow: null | "confirm" | "reason" | "loading" | "success"
 	const [clockOutStep, setClockOutStep] = useState(null);
 	const [pendingClockOutTime, setPendingClockOutTime] = useState(null);
 	const [earlyClockOutReason, setEarlyClockOutReason] = useState("");
 	const [alert, setAlert] = useState(null);
+	const [showLocationVerification, setShowLocationVerification] =
+		useState(false);
+	const [showFaceVerification, setShowFaceVerification] = useState(false);
+	const [pendingAttendanceAction, setPendingAttendanceAction] = useState(null); // 'clockIn' | 'clockOut'
+	const [pendingCoords, setPendingCoords] = useState(null);
 
 	useEffect(() => {
 		const fetchData = async () => {
-			setLoading(true);
+			showLoading("Memuat Dashboard...");
 			try {
 				const [userData, attendanceToday, attendanceHistory, leaves] =
 					await Promise.all([
@@ -81,44 +102,47 @@ export default function DashboardPage() {
 						new Promise((resolve) => setTimeout(resolve, LOADING_DELAY)),
 					]);
 
-				const totalLeaveDays = leaves
-					.filter((l) => l.status !== "rejected")
-					.reduce(
-						(sum, l) =>
-							sum +
-							calculateDays(
-								l.startDate || l.start_date,
-								l.endDate || l.end_date,
-							),
-						0,
-					);
+				const totalDays = leaves.reduce((acc, curr) => {
+					if (!curr.start_date || !curr.end_date) return acc;
+					if (curr.status === "rejected") return acc;
+					const s = new Date(curr.start_date);
+					const e = new Date(curr.end_date);
+					const diff = Math.ceil(Math.abs(e - s) / (1000 * 60 * 60 * 24)) + 1;
+					return acc + diff;
+				}, 0);
 
 				setStats({
 					attendanceToday,
 					leaves,
 					attendanceHistory,
-					leaveBalance: userData.leaveBalance || userData.leave_balance || 0,
-					totalLeaves: totalLeaveDays,
+					leaveBalance: userData.leaveBalance,
+					totalLeaves: totalDays,
 				});
 			} catch (error) {
 				console.error("Error fetching dashboard data:", error);
 			} finally {
-				setLoading(false);
+				hideLoading();
 			}
 		};
 
 		fetchData();
-	}, []);
+	}, [user]);
 
 	const calculateDuration = (startTime, endTime) => {
 		if (!startTime || !endTime || startTime === "-" || endTime === "-")
 			return "-";
 
 		try {
-			const [startHour, startMinute] = startTime.split(":").map(Number);
-			const [endHour, endMinute] = endTime.split(":").map(Number);
+			const [startHour, startMinute] = startTime.split(".").map(Number);
+			const [endHour, endMinute] = endTime.split(".").map(Number);
 
-			if (isNaN(startHour) || isNaN(endHour)) return "-";
+			if (
+				isNaN(startHour) ||
+				isNaN(endHour) ||
+				isNaN(startMinute) ||
+				isNaN(endMinute)
+			)
+				return "-";
 
 			let durationHour = endHour - startHour;
 			let durationMinute = endMinute - startMinute;
@@ -130,7 +154,7 @@ export default function DashboardPage() {
 
 			if (durationHour < 0) return "-";
 
-			return `${durationHour} Jam ${durationMinute > 0 ? `${durationMinute} Menit` : ""}`;
+			return `${durationHour} Jam${durationMinute > 0 ? ` ${durationMinute} Menit` : ""}`;
 		} catch (e) {
 			return "-";
 		}
@@ -140,10 +164,21 @@ export default function DashboardPage() {
 		return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
 	};
 
-	const handleClockIn = async () => {
+	const handleClockIn = () => {
+		setPendingAttendanceAction("clockIn");
+		setShowLocationVerification(true);
+	};
+
+	const executeClockIn = async (photo = null) => {
 		setAlert({ type: "loading" });
 		try {
-			await api.clockIn();
+			if (pendingCoords) {
+				console.log("Checking location before clock in:", pendingCoords);
+				await api.checkLocation(pendingCoords.lat, pendingCoords.lng);
+			} else {
+				console.warn("No pending coords for location check!");
+			}
+			await api.clockIn(photo);
 
 			const updatedToday = await api.getAttendanceToday();
 			const updatedHistory = await api.getAttendanceHistory();
@@ -158,16 +193,24 @@ export default function DashboardPage() {
 			});
 			setTimeout(() => setAlert(null), 2000);
 		} catch (error) {
+			console.error("Error clocking in:", error);
 			setAlert({
 				type: "error",
 				message: error.message || "Gagal melakukan clock in",
 			});
+		} finally {
+			setPendingCoords(null);
 		}
 	};
 
 	// --- Clock Out Flow ---
 
 	const handleClockOut = () => {
+		setPendingAttendanceAction("clockOut");
+		setClockOutStep("initial_confirm");
+	};
+
+	const prepareClockOut = () => {
 		const now = new Date();
 		const time = getHHMM(now);
 		setPendingClockOutTime(time);
@@ -179,6 +222,23 @@ export default function DashboardPage() {
 		} else {
 			executeClockOut(time, null);
 		}
+	};
+
+	const handleVerificationSuccess = (coords) => {
+		console.log("Verified at location:", coords);
+		setPendingCoords({ lat: coords[0], lng: coords[1] });
+		setShowLocationVerification(false);
+		if (pendingAttendanceAction === "clockIn") {
+			setShowFaceVerification(true);
+		}
+	};
+
+	const handleFaceSuccess = async (photo) => {
+		setShowFaceVerification(false);
+		if (pendingAttendanceAction === "clockIn") {
+			await executeClockIn(photo);
+		}
+		setPendingAttendanceAction(null);
 	};
 
 	const handleConfirmEarly = () => {
@@ -232,110 +292,142 @@ export default function DashboardPage() {
 	// --- Data Transformation for Tables ---
 
 	const absensiData = stats.attendanceHistory.map((item, index) => {
-		const isLate = item.clockIn > "08:00";
-		const isEarlyOut = item.clockOut && item.clockOut < "17:00";
+		const clockInTime = formatTime(item.clockIn);
+		const clockOutTime = formatTime(item.clockOut);
+
+		// Thresholds: In after 08:10 is late, Out before 17:00 is early
+		let isLate = false;
+		if (clockInTime !== "-") {
+			const [h, m] = clockInTime.split(".").map(Number);
+			if (h > 8 || (h === 8 && m > 10)) isLate = true;
+		}
+
+		let isEarlyOut = false;
+		if (clockOutTime !== "-" && clockOutTime !== "00.00") {
+			const [h, m] = clockOutTime.split(".").map(Number);
+			if (h < 17) isEarlyOut = true;
+		}
 
 		return {
 			no: index + 1,
-			tanggal: formatDate(item.date),
-			bulan: formatMonth(item.date),
+			tanggal: formatDateIndo(item.date),
 			durasi: item.clockOut
 				? calculateDuration(item.clockIn, item.clockOut)
 				: "-",
-			clockIn: formatTime(item.clockIn),
-			clockOut: formatTime(item.clockOut),
+			clockIn: clockInTime,
+			clockOut: clockOutTime,
 			isLate,
 			isEarlyOut,
+			note:
+				item.note ||
+				item.notes ||
+				item.reason ||
+				item.early_clock_out_reason ||
+				item.alasan ||
+				item.keterangan ||
+				"",
+			_raw: item,
 		};
 	});
 
-	const cutiData = stats.leaves.map((item, index) => ({
-		no: index + 1,
-		dateRange: `${formatDateIndo(item.startDate || item.start_date)} - ${formatDateIndo(item.endDate || item.end_date)}`,
-		reason: item.reason,
-		hrNote:
-			item.hr_note ||
-			item.note ||
-			item.admin_note ||
-			item.rejection_note ||
-			"-",
-		approver: item.approved_by_name || item.approved_by || item.approver || "-",
-		status: item.status,
-		duration: calculateDays(
-			item.startDate || item.start_date,
-			item.endDate || item.end_date,
-		),
-	}));
+	const cutiData = stats.leaves
+		.filter((l) => l.status !== "pending")
+		.map((item, index) => ({
+			no: index + 1,
+			dateRange: `${formatDateIndo(item.startDate)} - ${formatDateIndo(item.endDate)}`,
+			reason: item.reason,
+			hrNote:
+				item.notes || item.hrNote || item.hr_note || item.admin_note || "-",
+			approver:
+				item.approver ||
+				item.approved_by ||
+				item.admin_name ||
+				item.reviewer ||
+				item.approvedBy ||
+				"-",
+			status: item.status,
+		}));
 
 	// --- Columns Definition ---
 
-	const absensiColumns = [
-		{ header: "No", accessor: "no", className: "w-16" },
-		{ header: "Tanggal", accessor: "tanggal" },
-		{ header: "Bulan", accessor: "bulan" },
-		{ header: "Durasi kerja", accessor: "durasi" },
-		{
-			header: "Jam Masuk",
-			accessor: "clockIn",
-			render: (row) => (
-				<span className={row.isLate ? "text-danger" : "text-success-600"}>
-					{row.clockIn}
-				</span>
-			),
-		},
-		{
-			header: "Jam Pulang",
-			accessor: "clockOut",
-			render: (row) => (
-				<span className={row.isEarlyOut ? "text-danger" : "text-info"}>
-					{row.clockOut}
-				</span>
-			),
-		},
-	];
+	const absensiColumns = useMemo(
+		() => [
+			{ header: "No", accessor: "no", className: "w-16" },
+			{ header: "Tanggal", accessor: "tanggal" },
+			{ header: "Durasi kerja", accessor: "durasi" },
+			{
+				header: "Jam Masuk",
+				accessor: "clockIn",
+				render: (row) => (
+					<span className={`${row.isLate ? "text-danger font-medium" : ""}`}>
+						{row.clockIn}
+					</span>
+				),
+			},
+			{
+				header: "Jam Pulang",
+				accessor: "clockOut",
+				render: (row) => (
+					<span
+						className={`${row.isEarlyOut ? "text-danger font-medium" : ""}`}
+					>
+						{row.clockOut}
+					</span>
+				),
+			},
+			{
+				header: "Alasan",
+				accessor: "note",
+				className: "min-w-[150px] max-w-[250px] break-words text-left",
+				render: (row) => {
+					let finalNote = row.note;
+					// For debugging empty early clock out notes
+					if (!finalNote && row.isEarlyOut) {
+						finalNote = `Debug Data: ${JSON.stringify(row._raw)}`;
+					}
+					return (
+						<span
+							className={
+								finalNote ? "text-danger italic text-xs" : "text-gray-400"
+							}
+						>
+							{finalNote || "-"}
+						</span>
+					);
+				},
+			},
+		],
+		[],
+	);
 
-	const cutiColumns = [
-		{ header: "No", accessor: "no", className: "w-16" },
-		{ header: "Tanggal cuti", accessor: "dateRange" },
-		{
-			header: "Alasan cuti",
-			accessor: "reason",
-			className: "min-w-[200px] max-w-[300px]",
-			render: (row) => (
-				<div className="text-left line-clamp-2" title={row.reason}>
-					{row.reason}
-				</div>
-			),
-		},
-		{
-			header: "Catatan HR",
-			accessor: "hrNote",
-			render: (row) => (
-				<div
-					className={`text-sm ${row.status === "rejected" ? "text-danger-600 font-medium" : "text-gray-600"}`}
-				>
-					{row.hrNote || "-"}
-				</div>
-			),
-		},
-		{ header: "User approve", accessor: "approver" },
-		{
-			header: "Durasi",
-			accessor: "duration",
-			render: (row) => (
-				<span className="font-medium text-gray-700">{row.duration} Hari</span>
-			),
-		},
-		{
-			header: "Status cuti",
-			accessor: "status",
-			render: (row) => (
-				<div className="flex justify-center">
-					<Badge variant={getBadgeVariant(row.status)}>{row.status}</Badge>
-				</div>
-			),
-		},
-	];
+	const cutiColumns = useMemo(
+		() => [
+			{ header: "No", accessor: "no", className: "w-16" },
+			{ header: "Tanggal cuti", accessor: "dateRange" },
+			{
+				header: "Alasan cuti",
+				accessor: "reason",
+				className: "min-w-[200px] max-w-[300px]",
+				render: (row) => (
+					<div className="text-left line-clamp-2" title={row.reason}>
+						{row.reason}
+					</div>
+				),
+			},
+			{ header: "Catatan HR", accessor: "hrNote" },
+			{ header: "User approve", accessor: "approver" },
+			{
+				header: "Status cuti",
+				accessor: "status",
+				render: (row) => (
+					<div className="flex justify-center">
+						<Badge variant={getBadgeVariant(row.status)}>{row.status}</Badge>
+					</div>
+				),
+			},
+		],
+		[],
+	);
 
 	// --- Card Variant Logic ---
 	let cardVariant = "absen_belum";
@@ -351,21 +443,13 @@ export default function DashboardPage() {
 	}
 
 	return (
-		<Layout activeMenu="Beranda">
-			<div className="p-6 space-y-8 min-h-screen">
-				{loading && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-						<Alert
-							variant="loading"
-							title="Memuat Dashboard..."
-							shadow={true}
-						/>
-					</div>
-				)}
+		<Layout activeMenu="Beranda" title="Dashboard">
+			<div className="lg:p-8 p-4 space-y-8 min-h-screen">
+				<AlertBanner variant="info" message="Selamat datang kembali!" />
 
 				<>
 					{/* Cards */}
-					<div className="flex gap-6 flex-col lg:flex-row">
+					<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 						<Card
 							variant={cardVariant}
 							jamMasuk={formatTime(stats.attendanceToday?.clockIn)}
@@ -413,23 +497,68 @@ export default function DashboardPage() {
 						<Table columns={cutiColumns} data={cutiData} />
 					</div>
 
+					{/* Location Verification Overlay */}
+					{showLocationVerification &&
+						createPortal(
+							<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
+								<LocationVerification
+									onVerify={handleVerificationSuccess}
+									onCancel={() => {
+										setShowLocationVerification(false);
+										setPendingAttendanceAction(null);
+									}}
+								/>
+							</div>,
+							document.body,
+						)}
+
+					{/* Face Verification Overlay */}
+					{showFaceVerification &&
+						createPortal(
+							<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
+								<FaceVerification
+									onVerify={handleFaceSuccess}
+									onCancel={() => {
+										setShowFaceVerification(false);
+										setPendingAttendanceAction(null);
+									}}
+								/>
+							</div>,
+							document.body,
+						)}
+
+					{/* Clock Out Step 0: Konfirmasi awal */}
+					{clockOutStep === "initial_confirm" &&
+						createPortal(
+							<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+								<Alert
+									variant="question"
+									title="Ingin Clock out"
+									buttonText="Lanjut"
+									cancelText="Batal"
+									onConfirm={prepareClockOut}
+									onCancel={resetClockOutFlow}
+								/>
+							</div>,
+							document.body,
+						)}
+
 					{/* Clock Out Step 1: Konfirmasi pulang cepat */}
-					<Modal
-						isOpen={clockOutStep === "confirm"}
-						onClose={resetClockOutFlow}
-						hideCloseButton={true}
-					>
-						<Alert
-							variant="question"
-							title="Pulang Lebih Cepat?"
-							buttonText="Ya, Pulang"
-							cancelText="Batal"
-							onConfirm={handleConfirmEarly}
-							onCancel={resetClockOutFlow}
-							shadow={false}
-							className="border-0 p-0 w-full"
-						/>
-					</Modal>
+					{clockOutStep === "confirm" &&
+						createPortal(
+							<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+								<Alert
+									variant="question"
+									title=""
+									message="Belum masuk jam pulang, ingin lanjut Clock out?"
+									buttonText="Lanjut"
+									cancelText="Batal"
+									onConfirm={handleConfirmEarly}
+									onCancel={resetClockOutFlow}
+								/>
+							</div>,
+							document.body,
+						)}
 
 					{/* Clock Out Step 2: Input alasan */}
 					<Modal
@@ -447,7 +576,7 @@ export default function DashboardPage() {
 										? "border-danger focus:border-danger-700"
 										: "border-gray-300 focus:border-brand"
 								}`}
-								placeholder="Text"
+								placeholder="Masukkan Alasan"
 								rows={4}
 								maxLength={50}
 								value={earlyClockOutReason}
@@ -485,36 +614,33 @@ export default function DashboardPage() {
 					</Modal>
 
 					{/* Clock Out Step 3: Loading */}
-					<Modal isOpen={clockOutStep === "loading"} onClose={() => {}}>
-						<Alert
-							variant="loading"
-							title="Mohon Menunggu..."
-							shadow={false}
-							hideButtons
-							className="border-0 p-0 w-full"
-						/>
-					</Modal>
+					{clockOutStep === "loading" &&
+						createPortal(
+							<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+								<Alert
+									variant="loading"
+									title="Mohon Menunggu..."
+									hideButtons
+								/>
+							</div>,
+							document.body,
+						)}
 
 					{/* Clock Out Step 4: Success */}
-					<Modal
-						isOpen={clockOutStep === "success"}
-						onClose={resetClockOutFlow}
-					>
-						<Alert
-							variant="success"
-							title="Berhasil!"
-							shadow={false}
-							hideButtons
-							className="border-0 p-0 w-full"
-						/>
-					</Modal>
+					{clockOutStep === "success" &&
+						createPortal(
+							<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+								<Alert variant="success" title="Berhasil!" hideButtons />
+							</div>,
+							document.body,
+						)}
 				</>
 			</div>
 
 			{/* Alert Overlay */}
 			{alert &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4">
 						<Alert
 							variant={alert.type}
 							message={alert.message}

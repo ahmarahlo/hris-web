@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
 	Layout,
@@ -13,21 +14,42 @@ import {
 	TrashIcon,
 	InformationCircleIcon,
 	LockOpenIcon,
+	ChevronLeftIcon,
 } from "@heroicons/react/24/solid";
 import { api } from "../../lib/api";
-import { LOADING_DELAY } from "../../lib/constants";
+import { useAuth } from "../../lib/AuthContext";
+import { useLoading } from "../../lib/LoadingContext";
+import { LOADING_DELAY, USER_ROLES, DEPARTMENTS } from "../../lib/constants";
+
+/** Mengubah raw MySQL duplicate key error menjadi pesan yang ramah user. */
+const parseDuplicateError = (msg = "") => {
+	if (/Duplicate entry/i.test(msg)) {
+		if (/nik/i.test(msg))
+			return "NIK sudah digunakan. Gunakan NIK yang berbeda.";
+		if (/email/i.test(msg))
+			return "Email sudah terdaftar. Gunakan email yang berbeda.";
+		if (/phone/i.test(msg)) return "Nomor telepon sudah terdaftar.";
+		return "Data sudah terdaftar. Periksa kembali input kamu.";
+	}
+	return msg;
+};
 
 export default function ManajemenAkunPage() {
-	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-	const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-	const [createdUser, setCreatedUser] = useState(null);
-	const [editingUser, setEditingUser] = useState(null);
-	const [alert, setAlert] = useState(null);
+	const navigate = useNavigate();
+	const { user } = useAuth();
+	const { showLoading, hideLoading } = useLoading();
 	const [users, setUsers] = useState([]);
 	const [deleteConfirm, setDeleteConfirm] = useState(null);
 	const [unlockConfirm, setUnlockConfirm] = useState(null);
+	const [updateUser, setUpdateUser] = useState(null);
+	const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+	// Modal States for Adding User
+	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+	const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+	const [createdUser, setCreatedUser] = useState(null);
 	const [isUnlockInProgress, setIsUnlockInProgress] = useState(false);
-	const [loading, setLoading] = useState(true);
+	const [alert, setAlert] = useState(null);
 
 	const [params, setParams] = useState({
 		page: 1,
@@ -36,70 +58,92 @@ export default function ManajemenAkunPage() {
 		status: "",
 		department: "",
 	});
+	const [debouncedSearch, setDebouncedSearch] = useState(params.search);
 	const [totalCount, setTotalCount] = useState(0);
 
 	useEffect(() => {
-		fetchEmployees();
-	}, [params]);
+		const timer = setTimeout(() => {
+			setDebouncedSearch(params.search);
+		}, 500);
+		return () => clearTimeout(timer);
+	}, [params.search]);
 
-	const fetchEmployees = async () => {
-		setLoading(true);
+	useEffect(() => {
+		fetchEmployees(true);
+	}, [debouncedSearch]);
+
+	useEffect(() => {
+		fetchEmployees(false);
+	}, [params.page, params.limit, params.status, params.department]);
+
+	const fetchEmployees = async (isSearch = false) => {
+		if (!isSearch) showLoading("Memuat Data Akun...");
 		try {
 			// Convert params to API format (limit instead of pageSize)
+			// Kita tarik semua akun (limit 500) agar pencarian Nama (Andi dkk) lancar
+			// dan agar kita bisa mengurutkan dari akun tertua (Admins) di paling atas.
 			const apiParams = {
-				page: params.page,
-				limit: params.limit,
-				search: params.search,
-				status: params.status,
-				department: params.department,
+				page: 1,
+				limit: 500,
+				search: "", // Gunakan pencarian client-side di komponen Table
 			};
 
 			const minDelay = new Promise((resolve) =>
 				setTimeout(resolve, LOADING_DELAY),
 			);
 
-			const [response] = await Promise.all([
+			// Teteh ubah bagian ini: Gunakan Promise.all agar API dan delay berjalan paralel dan saling menunggu
+			const [rawResponse] = await Promise.all([
 				api.getDashboardEmployees(apiParams),
 				minDelay,
 			]);
 
-			// Handle potential wrapper from API (e.g. { data: [], total: 100 })
-			const employees = response.data || response || [];
+			// Handling direct array or { data, total } structure
+			const employees = Array.isArray(rawResponse)
+				? rawResponse
+				: rawResponse.data || [];
+			const total =
+				rawResponse.total || rawResponse.total_elements || employees.length;
 
-			console.log("[Account List Raw Data]:", employees);
+			console.log("[Account List Diagnostic]:", {
+				raw: rawResponse,
+				firstItem: employees[0],
+				keys: employees[0] ? Object.keys(employees[0]) : [],
+			});
 
-			const total = response.total ?? employees.length;
-			setTotalCount(total);
-
-			const mapped = (Array.isArray(employees) ? employees : []).map(
-				(item, i) => {
-					return {
-						id: item.id,
-						no: i + 1,
-						name:
-							item.full_name ||
-							item.fullName ||
-							item.name ||
-							item.employee_name ||
-							"-",
-						phone: item.phone || item.phone_number || item.no_hp || "-",
-						nip: item.nik || item.nip || "-",
-						email: item.email || "-",
-						division: item.department || item.division || item.position || "-",
-						approver: item.approved_by_name || item.approved_by || "-",
-						status: item.status || "active",
-						_raw: item,
-					};
-				},
+			// Urutkan berdasarkan ID ASC agar Akun Terlama (biasanya Admin/Super Admin)
+			// berada di paling atas daftar sesuai permintaan.
+			const sortedEmployees = (Array.isArray(employees) ? employees : []).sort(
+				(a, b) => (a.id || 0) - (b.id || 0),
 			);
+
+			const mapped = sortedEmployees.map((item, i) => {
+				return {
+					id: item.id,
+					no: i + 1, // Penomoran urut dari yang tertua
+					name:
+						item.full_name ||
+						item.fullName ||
+						item.name ||
+						item.employee_name ||
+						"-",
+					nip: item.nik || item.nip || "-",
+					email: item.email || "-",
+					phone: item.phone || "-",
+					division: item.department || item.division || item.position || "-",
+					status: item.status || "active",
+					lastActionType:
+						item.last_action_type || item.action_type || item.update_type || "",
+					_raw: item,
+				};
+			});
 			setUsers(mapped);
 		} catch (error) {
 			console.error("Error fetching employees:", error);
 		} finally {
-			setLoading(false);
+			hideLoading();
 		}
 	};
-
 	const handleDelete = async (user) => {
 		setDeleteConfirm(user);
 	};
@@ -114,7 +158,7 @@ export default function ManajemenAkunPage() {
 				type: "success",
 				message: `Akun ${user.name} berhasil dihapus`,
 			});
-			fetchEmployees();
+			fetchEmployees(); // Auto-refresh after delete
 		} catch (error) {
 			setAlert({ type: "error", message: `Gagal menghapus: ${error.message}` });
 		}
@@ -135,81 +179,156 @@ export default function ManajemenAkunPage() {
 		setIsPasswordModalOpen(true);
 	};
 
-	const divisionOptions = [
-		{ label: "UI/UX Designer", value: "UI/UX Designer" },
-		{ label: "IT OPS", value: "IT OPS" },
-		{ label: "System Analyst", value: "System Analyst" },
-		{ label: "QA", value: "QA" },
-		{ label: "HR", value: "HR" },
-	];
+	const handleAccountSubmit = async (data, setErrors) => {
+		// Prepare draft user (Creation path)
+		const draftUser = {
+			full_name: data.name,
+			nik: data.nip,
+			email: data.email,
+			phone: data.phone,
+			department: data.division,
+		};
 
-	const columns = [
-		{ header: "No", accessor: "no", className: "w-16" },
-		{ header: "Nama karyawan", accessor: "name" },
-		{ header: "NIP", accessor: "nip" },
-		{ header: "Email", accessor: "email" },
-		{
-			header: "Divisi",
-			accessor: "division",
-			filterOptions: [{ label: "Semua Divisi", value: "" }, ...divisionOptions],
-			onFilterSelect: (opt) => handleFilterChange("department", opt.value),
-		},
-		{ header: "User approve", accessor: "approver" },
-		{
-			header: "Status",
-			accessor: "status",
-			filterOptions: [
-				{ label: "Semua Status", value: "" },
-				{ label: "Active", value: "active" },
-				{ label: "Blokir", value: "blocked" },
-			],
-			onFilterSelect: (opt) => handleFilterChange("status", opt.value),
-			render: (row) => (
-				<Badge variant={row.status === "active" ? "approve" : "blokir"}>
-					{row.status === "active" ? "Active" : "Blokir"}
-				</Badge>
-			),
-		},
-		{
-			header: "Action",
-			accessor: "action",
-			render: (row) => (
-				<div className="flex gap-2 justify-center">
-					<button
-						className="p-1.5 rounded-lg bg-danger text-white hover:bg-danger-600 transition-all duration-200 active:scale-95 hover:shadow-md"
-						onClick={() => handleDelete(row)}
-						title="Hapus Akun"
-					>
-						<TrashIcon className="w-5 h-5" />
-					</button>
-					{row.status !== "active" ? (
+		setCreatedUser(draftUser);
+		setIsCreateModalOpen(false);
+		setIsPasswordModalOpen(true);
+	};
+
+	const handleSetPassword = async (password) => {
+		if (!createdUser) return;
+
+		setAlert({ type: "loading" });
+		try {
+			if (isUnlockInProgress) {
+				// Unlock flow (Reset Password)
+				await api.resetEmployeePassword(createdUser.id, {
+					password: password,
+					new_password: password,
+					confirm_password: password,
+					is_new_employee: 1, // Mark as new again after reset
+					last_action_type: "unblock", // Action type hint
+				});
+
+				setAlert({
+					type: "success",
+					message: `Akun ${createdUser.name} berhasil diaktifkan kembali.`,
+				});
+			} else {
+				// Create flow
+				const payload = {
+					...createdUser,
+					password: password,
+				};
+
+				await api.createEmployee(payload);
+
+				setAlert({
+					type: "success",
+					message: "Akun berhasil dibuat.",
+				});
+			}
+
+			setIsPasswordModalOpen(false);
+			setCreatedUser(null);
+			setIsUnlockInProgress(false);
+			fetchEmployees();
+		} catch (error) {
+			const raw = error.response?.data?.message || error.message || "";
+			const friendlyMsg = parseDuplicateError(raw);
+			setAlert({
+				type: "error",
+				message: `Gagal: ${friendlyMsg}`,
+			});
+		}
+		setTimeout(() => setAlert(null), 3000);
+	};
+
+	const openCreateModal = () => {
+		setCreatedUser(null);
+		setIsCreateModalOpen(true);
+	};
+
+	const divisionOptions = useMemo(
+		() =>
+			DEPARTMENTS.map((dept) => ({
+				label: dept,
+				value: dept,
+			})),
+		[],
+	);
+
+	const columns = useMemo(
+		() => [
+			{ header: "No", accessor: "no", className: "w-16" },
+			{ header: "Nama karyawan", accessor: "name" },
+			{ header: "NIP", accessor: "nip" },
+			{ header: "Email", accessor: "email" },
+			{
+				header: "Divisi",
+				accessor: "division",
+				filterType: "select",
+				filterOptions: [
+					{ label: "Semua Divisi", value: "" },
+					...divisionOptions,
+				],
+			},
+			{
+				header: "Status",
+				accessor: "status",
+				filterType: "select",
+				filterOptions: [
+					{ label: "Semua Status", value: "" },
+					{ label: "Active", value: "active" },
+					{ label: "Blokir", value: "blocked" },
+				],
+				render: (row) => (
+					<Badge variant={row.status === "active" ? "approve" : "blokir"}>
+						{row.status === "active" ? "Active" : "Blokir"}
+					</Badge>
+				),
+			},
+			{
+				header: "Action",
+				accessor: "action",
+				render: (row) => (
+					<div className="flex gap-2 justify-center">
 						<button
-							className="p-1.5 rounded-lg bg-info text-white hover:bg-info-600 transition-all duration-200 active:scale-95 hover:shadow-md"
-							onClick={() => handleUnlock(row)}
-							title="Buka Gembok"
+							className="p-1.5 rounded-lg bg-danger text-white hover:bg-danger-600 transition-all duration-200 active:scale-95 hover:shadow-md"
+							onClick={() => handleDelete(row)}
+							title="Hapus Akun"
 						>
-							<LockOpenIcon className="w-5 h-5" />
+							<TrashIcon className="w-5 h-5" />
 						</button>
-					) : (
-						<button
-							className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-700 transition-all duration-200 active:scale-95 hover:shadow-md"
-							onClick={() => openEditModal(row)}
-							title="Edit Akun"
-						>
-							<PencilSquareIcon className="w-5 h-5" />
-						</button>
-					)}
-				</div>
-			),
-		},
-	];
+						{row.status !== "active" ? (
+							<button
+								className="p-1.5 rounded-lg bg-info text-white hover:bg-info-600 transition-all duration-200 active:scale-95 hover:shadow-md"
+								onClick={() => handleUnlock(row)}
+								title="Buka Gembok"
+							>
+								<LockOpenIcon className="w-5 h-5" />
+							</button>
+						) : (
+							<button
+								className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-700 transition-all duration-200 active:scale-95 hover:shadow-md"
+								onClick={() => navigate(`/admin/akun/${row.id}`)}
+								title="Lihat Detail / Edit Akun"
+							>
+								<ChevronLeftIcon className="w-5 h-5" />
+							</button>
+						)}
+					</div>
+				),
+			},
+		],
+		[divisionOptions, handleDelete, handleUnlock, navigate],
+	);
 
 	const handleParamsChange = (newParams) => {
 		setParams((prev) => ({
 			...prev,
 			page: newParams.page,
 			limit: newParams.pageSize,
-			search: newParams.search || prev.search,
+			search: newParams.search,
 		}));
 	};
 
@@ -223,216 +342,43 @@ export default function ManajemenAkunPage() {
 
 	// --- Create / Edit Account ---
 
-	const handleAccountSubmit = async (data, setErrors) => {
-		try {
-			if (editingUser) {
-				// Edit mode
-				setAlert({ type: "loading" });
-				const payload = {
-					full_name: data.name,
-					phone: data.phone,
-					department: data.division,
-					position: data.division,
-				};
-
-				await api.updateEmployee(editingUser.id, payload);
-				setAlert({
-					type: "success",
-					message: `Akun ${data.name} berhasil diperbarui`,
-				});
-				setIsCreateModalOpen(false);
-				setEditingUser(null);
-				fetchEmployees();
-			} else {
-				// Create mode (draft → lanjut ke password modal)
-				const draftUser = {
-					full_name: data.name,
-					email: data.email,
-					phone: data.phone,
-					nik: data.nip,
-					department: data.division,
-					position: data.division,
-					joined_at: new Date().toISOString(),
-				};
-
-				setCreatedUser(draftUser);
-				setIsCreateModalOpen(false);
-				setIsPasswordModalOpen(true);
-			}
-		} catch (error) {
-			console.error(error);
-			const msg = error.response?.data?.message || error.message;
-
-			if (msg.includes("Duplicate entry") || msg.includes("1062")) {
-				if (msg.includes("nik")) {
-					setErrors({ nip: "NIP sudah digunakan" });
-				} else if (msg.includes("email")) {
-					setErrors({ email: "Email sudah digunakan" });
-				} else {
-					setAlert({ type: "error", message: `Gagal: ${msg}` });
-				}
-			} else {
-				setAlert({ type: "error", message: `Gagal menyimpan: ${msg}` });
-			}
-		}
-	};
-
-	const openCreateModal = () => {
-		setEditingUser(null);
-		setIsCreateModalOpen(true);
-	};
-
-	const openEditModal = (user) => {
-		setEditingUser(user);
-		setIsCreateModalOpen(true);
-	};
-
-	// --- Set Password & Finalize ---
-
-	const handleSetPassword = async (password) => {
-		if (!createdUser) return;
-
-		setAlert({ type: "loading" });
-		try {
-			if (isUnlockInProgress) {
-				// Unlock flow
-				console.log("[Unlock] Calling reset-password for ID:", createdUser.id);
-				const resp = await api.resetEmployeePassword(createdUser.id, {
-					password: password,
-					new_password: password,
-					confirm_password: password,
-				});
-				console.log("[Unlock] API Response:", resp);
-
-				setAlert({
-					type: "success",
-					message: `Akun ${createdUser.name} berhasil diaktifkan kembali.`,
-				});
-			} else {
-				// Create flow
-				const payload = {
-					...createdUser,
-					password: password,
-				};
-
-				console.log("[Create Employee Payload]:", payload);
-				const resp = await api.createEmployee(payload);
-				console.log("[Create Employee API Response]:", resp);
-
-				setAlert({
-					type: "success",
-					message: "Akun berhasil dibuat dengan password",
-				});
-			}
-
-			setIsPasswordModalOpen(false);
-			setCreatedUser(null);
-			setIsUnlockInProgress(false);
-			fetchEmployees();
-		} catch (error) {
-			const msg = error.response?.data?.message || error.message;
-
-			if (msg.includes("Duplicate entry") || msg.includes("1062")) {
-				if (msg.includes("nik") || msg.includes("idx_employees_nik")) {
-					setAlert({ type: "error", message: "NIP sudah terdaftar" });
-				} else if (msg.includes("email")) {
-					setAlert({ type: "error", message: "Email sudah terdaftar" });
-				} else {
-					setAlert({ type: "error", message: "Data duplikat ditemukan" });
-				}
-			} else {
-				setAlert({
-					type: "error",
-					message: `Gagal ${isUnlockInProgress ? "membuka akun" : "membuat akun"}: ${msg}`,
-				});
-			}
-		}
-		setTimeout(() => setAlert(null), 3000);
-	};
-
 	return (
-		<Layout activeMenu="Manajemen akun" title="Manajemen akun">
-			<div className="p-8 space-y-6 w-full relative">
-				{/* Alert */}
-				{alert &&
-					createPortal(
-						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-							<Alert
-								variant={alert.type}
-								onClose={() => setAlert(null)}
-								message={alert.message}
-							/>
-						</div>,
-						document.body,
-					)}
-
+		<Layout activeMenu="Manajemen akun user" title="Manajemen akun">
+			<div className="lg:p-8 p-4 space-y-6 w-full relative">
 				<div className="space-y-4">
-					<h3 className="text-gray-600 font-medium text-lg">
-						Tambah akun karyawan
-					</h3>
-					<Button onClick={openCreateModal} variant="info">
-						Tambah akun
-					</Button>
-				</div>
-
-				<div className="space-y-4">
-					<div className="flex justify-between items-center sm:flex-row flex-col gap-4">
+					<div className="flex flex-col items-start gap-4">
 						<h3 className="text-gray-600 font-medium text-lg">
 							Manajemen akun karyawan
 						</h3>
+						<Button onClick={openCreateModal} variant="info">
+							Tambah akun
+						</Button>
 					</div>
 
 					<div>
-						{loading && (
-							<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-								<Alert
-									variant="loading"
-									title="Memuat Data Akun..."
-									shadow={true}
-								/>
-							</div>
-						)}
-
 						<Table
 							columns={columns}
 							data={users}
-							manual={true}
-							totalCount={totalCount}
-							currentPage={params.page}
-							pageSize={params.limit}
+							manual={false} // Pindah ke client-side agar filter/search instan & dukung sort custom
+							maxheight="620px"
+							totalCount={users.length}
+							pageSize={5}
 							search={params.search}
-							onParamsChange={handleParamsChange}
+							onFilterChange={(accessor, value) => {
+								if (accessor === "division") {
+									handleFilterChange("department", value);
+								} else {
+									handleFilterChange(accessor, value);
+								}
+							}}
 						/>
 					</div>
 				</div>
 
-				{/* Modal 1: Create/Edit Account */}
-				<CreateAccountModal
-					isOpen={isCreateModalOpen}
-					onClose={() => {
-						setIsCreateModalOpen(false);
-						setEditingUser(null);
-					}}
-					onSubmit={handleAccountSubmit}
-					initialData={editingUser}
-				/>
-
-				{/* Modal 2: Generate Password */}
-				<GeneratePasswordModal
-					isOpen={isPasswordModalOpen}
-					onClose={() => {
-						setIsPasswordModalOpen(false);
-						setCreatedUser(null);
-						setIsUnlockInProgress(false);
-					}}
-					onSubmit={handleSetPassword}
-					userEmail={createdUser?.email}
-				/>
-
 				{/* Delete Confirmation Overlay */}
 				{deleteConfirm &&
 					createPortal(
-						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
 							<Alert
 								variant="question"
 								title={`Yakin ingin menghapus akun ${deleteConfirm.name}?`}
@@ -450,7 +396,7 @@ export default function ManajemenAkunPage() {
 				{/* Unlock Confirmation Overlay */}
 				{unlockConfirm &&
 					createPortal(
-						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-center">
+						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4 text-center">
 							<Alert
 								variant="question"
 								title="Apakah anda yakin ingin mengaktifkan akun ini?"
@@ -466,67 +412,285 @@ export default function ManajemenAkunPage() {
 						</div>,
 						document.body,
 					)}
+
+				{/* Alert Overlay */}
+				{alert &&
+					createPortal(
+						<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4">
+							<Alert
+								variant={alert.type}
+								onClose={() => setAlert(null)}
+								message={alert.message}
+							/>
+						</div>,
+						document.body,
+					)}
+
+				{/* Modal 1: Create Account */}
+				<CreateAccountModal
+					isOpen={isCreateModalOpen}
+					onClose={() => setIsCreateModalOpen(false)}
+					onSubmit={handleAccountSubmit}
+					currentUserRole={user?.role}
+				/>
+
+				{/* Modal 2: Generate Password */}
+				<GeneratePasswordModal
+					isOpen={isPasswordModalOpen}
+					onClose={() => {
+						setIsPasswordModalOpen(false);
+						setCreatedUser(null);
+						setIsUnlockInProgress(false);
+					}}
+					onSubmit={handleSetPassword}
+					userEmail={createdUser?.email}
+				/>
+
+				{/* Modal 3: Update Account (Full Edits for Admin) */}
+				<UpdateAccountModal
+					isOpen={isUpdateModalOpen}
+					onClose={() => {
+						setIsUpdateModalOpen(false);
+						setUpdateUser(null);
+					}}
+					onSubmit={async (data) => {
+						setAlert({ type: "loading" });
+						try {
+							await api.updateEmployee(updateUser.id, {
+								...data,
+								last_action_type: "update_data", // Action type hint
+							});
+							setAlert({
+								type: "success",
+								message: "Data karyawan berhasil diperbarui",
+							});
+							setIsUpdateModalOpen(false);
+							setUpdateUser(null);
+							fetchEmployees(); // Auto-refresh after update
+						} catch (error) {
+							setAlert({
+								type: "error",
+								message: error.message || "Gagal memperbarui data",
+							});
+						}
+						setTimeout(() => setAlert(null), 3000);
+					}}
+					userData={updateUser}
+					currentUserRole={user?.role}
+					userRoleRaw={user?.role} // Pass raw role for debugging
+				/>
 			</div>
 		</Layout>
 	);
 }
 
-// --- Component: Create Account Modal ---
-function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
+// --- Component: Update Account Modal ---
+function UpdateAccountModal({
+	isOpen,
+	onClose,
+	onSubmit,
+	userData,
+	currentUserRole,
+}) {
+	const [formData, setFormData] = useState({
+		full_name: "",
+		email: "",
+		nik: "",
+		department: "",
+		role: "",
+		phone: "",
+	});
+
+	useEffect(() => {
+		if (isOpen && userData) {
+			setFormData({
+				full_name:
+					userData.full_name ||
+					userData.name ||
+					userData.fullName ||
+					userData.employeeName ||
+					userData.employee_name ||
+					"",
+				email: userData.email || "",
+				nik:
+					userData.nik ||
+					userData.nip ||
+					userData.employeeId ||
+					userData.employee_id ||
+					"",
+				department:
+					userData.department || userData.position || userData.division || "",
+				role: userData.role || "employee",
+				phone: userData.phone || "",
+			});
+		}
+	}, [isOpen, userData]);
+
+	const divisionOptions = [
+		{ label: "UI/UX Designer", value: "UI/UX Designer" },
+		{ label: "IT OPS", value: "IT OPS" },
+		{ label: "System Analyst", value: "System Analyst" },
+		{ label: "QA", value: "QA" },
+		{ label: "HR", value: "HR" },
+	];
+
+	const getInputClass = (isReadOnly = false) =>
+		`w-full p-2.5 border border-gray-300 rounded-xl outline-none transition-all ${
+			isReadOnly
+				? "bg-gray-50 text-gray-500 cursor-not-allowed"
+				: "bg-white text-gray-700 focus:border-brand-400 focus:ring-2 focus:ring-brand/10"
+		}`;
+
+	return (
+		<Modal isOpen={isOpen} onClose={onClose} title="Edit akun user">
+			<div className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
+				{/* Nama Karyawan */}
+				<div className="space-y-1">
+					<label className="text-sm font-semibold text-gray-600">
+						Nama Karyawan
+					</label>
+					<input
+						value={formData.full_name}
+						onChange={(e) =>
+							setFormData({ ...formData, full_name: e.target.value })
+						}
+						className={getInputClass(false)}
+						placeholder="Nama lengkap..."
+					/>
+				</div>
+
+				{/* Email */}
+				<div className="space-y-1">
+					<label className="text-sm font-semibold text-gray-600">Email</label>
+					<input
+						value={formData.email}
+						onChange={(e) =>
+							setFormData({ ...formData, email: e.target.value })
+						}
+						className={getInputClass(false)}
+						placeholder="Email aktif..."
+					/>
+				</div>
+
+				{/* NIP */}
+				<div className="space-y-1">
+					<label className="text-sm font-semibold text-gray-600">NIP</label>
+					<input
+						value={formData.nik}
+						onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+						className={getInputClass(false)}
+						placeholder="Nomor Induk Pegawai..."
+					/>
+				</div>
+
+				{/* Divisi */}
+				<div className="space-y-1">
+					<label className="text-sm font-semibold text-gray-600">Divisi</label>
+					<select
+						value={formData.department}
+						onChange={(e) =>
+							setFormData({ ...formData, department: e.target.value })
+						}
+						className={getInputClass(false)}
+					>
+						<option value="">Pilih Divisi</option>
+						{divisionOptions.map((opt) => (
+							<option key={opt.value} value={opt.value}>
+								{opt.label}
+							</option>
+						))}
+					</select>
+				</div>
+
+				{/* Role (SUPER ADMIN ONLY) */}
+				{String(currentUserRole).toLowerCase().replace(/\s/g, "") ===
+					"superadmin" && (
+					<div className="space-y-1">
+						<label className="text-sm font-semibold text-gray-600">Role</label>
+						<select
+							value={formData.role}
+							onChange={(e) =>
+								setFormData({ ...formData, role: e.target.value })
+							}
+							className={getInputClass(false)}
+						>
+							<option value="employee">Employee</option>
+							<option value="admin">Admin</option>
+						</select>
+					</div>
+				)}
+
+				{/* No Telepone */}
+				<div className="space-y-1">
+					<label className="text-sm font-semibold text-gray-600">
+						No. Telepon
+					</label>
+					<input
+						type="number"
+						value={formData.phone}
+						onChange={(e) =>
+							setFormData({ ...formData, phone: e.target.value })
+						}
+						className={getInputClass(false)}
+						placeholder="0812xxxx"
+					/>
+				</div>
+
+				{/* Buttons */}
+				<div className="flex justify-end gap-3 pt-2">
+					<button
+						onClick={onClose}
+						className="px-6 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-all active:scale-95"
+					>
+						Batal
+					</button>
+					<button
+						onClick={() => {
+							const payload = {
+								department: formData.department,
+								email: formData.email,
+								name: formData.full_name,
+								phone: formData.phone,
+								role: formData.role,
+							};
+							console.log("[UpdateAccount] Sending Strict Payload:", payload);
+							onSubmit(payload);
+						}}
+						className="px-6 py-2.5 bg-brand text-white rounded-xl font-bold hover:bg-brand-700 transition-all active:scale-95 shadow-lg shadow-brand/20"
+					>
+						Simpan Perubahan
+					</button>
+				</div>
+			</div>
+		</Modal>
+	);
+}
+
+// --- Component: Create Account Modal (ONLY FOR CREATE) ---
+function CreateAccountModal({ isOpen, onClose, onSubmit, currentUserRole }) {
 	const [formData, setFormData] = useState({
 		name: "",
 		email: "",
 		phone: "",
 		nip: "",
 		division: "",
+		role: "employee",
 	});
 	const [errors, setErrors] = useState({});
 
 	useEffect(() => {
 		if (isOpen) {
-			if (initialData) {
-				const raw = initialData._raw || {};
-				setFormData({
-					name: raw.full_name || initialData.name || "",
-					email: raw.email || initialData.email || "",
-					phone:
-						raw.phone ||
-						raw.phone_number ||
-						raw.no_hp ||
-						initialData.phone ||
-						"",
-					nip: raw.nik || initialData.nip || "",
-					division: raw.department || initialData.division || "",
-				});
-
-				// Fetch detail dari GET /employees/{id} untuk melengkapi data (termasuk phone)
-				api
-					.getEmployeeDetail(initialData.id)
-					.then((detail) => {
-						if (detail) {
-							setFormData((prev) => ({
-								...prev,
-								phone: detail.phone || detail.phone_number || prev.phone,
-								name: detail.full_name || prev.name,
-								email: detail.email || prev.email,
-								nip: detail.nik || prev.nip,
-								division: detail.department || prev.division,
-							}));
-						}
-					})
-					.catch(() => {});
-			} else {
-				setFormData({
-					name: "",
-					email: "",
-					phone: "",
-					nip: "",
-					division: "",
-				});
-			}
+			setFormData({
+				name: "",
+				email: "",
+				phone: "",
+				nip: "",
+				division: "",
+				role: "employee",
+			});
 			setErrors({});
 		}
-	}, [isOpen, initialData]);
+	}, [isOpen]);
 
 	const handleChange = (e) => {
 		const { name, value } = e.target;
@@ -573,14 +737,8 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 				: "border-brand-300 text-brand-900 focus:border-brand focus:ring-brand-100 placeholder-gray-400"
 		}`;
 
-	const isEdit = !!initialData;
-
 	return (
-		<Modal
-			isOpen={isOpen}
-			onClose={onClose}
-			title={isEdit ? "Edit Akun" : "Akun Baru"}
-		>
+		<Modal isOpen={isOpen} onClose={onClose} title="Akun Baru">
 			<div className="space-y-4">
 				{/* Nama */}
 				<div className="space-y-1">
@@ -590,7 +748,6 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.name}
 						onChange={handleChange}
 						className={getInputClass(errors.name)}
-						disabled={isEdit && initialData.status === "active"}
 						placeholder="Tomi darvito"
 					/>
 					{errors.name && (
@@ -607,7 +764,6 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.email}
 						onChange={handleChange}
 						className={getInputClass(errors.email)}
-						disabled={isEdit && initialData.status === "active"}
 						placeholder="Tomi@gmail.com"
 					/>
 					{errors.email && (
@@ -615,16 +771,16 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 					)}
 				</div>
 
-				{/* Phone */}
+				{/* No HP */}
 				<div className="space-y-1">
-					<label className="text-sm font-medium text-gray-700">No. HP</label>
+					<label className="text-sm font-medium text-gray-700">No HP</label>
 					<input
 						name="phone"
+						type="number"
 						value={formData.phone}
 						onChange={handleChange}
 						className={getInputClass(errors.phone)}
-						disabled={isEdit && initialData.status === "active"}
-						placeholder="08123456789"
+						placeholder="0812xxxx"
 					/>
 					{errors.phone && (
 						<p className="text-xs text-danger font-medium">{errors.phone}</p>
@@ -639,7 +795,6 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 						value={formData.nip}
 						onChange={handleChange}
 						className={getInputClass(errors.nip)}
-						disabled={isEdit && initialData.status === "active"}
 						placeholder="98237443"
 					/>
 					{errors.nip && (
@@ -668,13 +823,29 @@ function CreateAccountModal({ isOpen, onClose, onSubmit, initialData }) {
 					)}
 				</div>
 
+				{/* Role (Super Admin Only) */}
+				{currentUserRole === USER_ROLES.SUPER_ADMIN && (
+					<div className="space-y-1">
+						<label className="text-sm font-medium text-gray-700">Role</label>
+						<select
+							name="role"
+							value={formData.role}
+							onChange={handleChange}
+							className={getInputClass(errors.role)}
+						>
+							<option value="employee">Employee</option>
+							<option value="admin">Admin</option>
+						</select>
+					</div>
+				)}
+
 				{/* Buttons */}
 				<div className="flex justify-end gap-3 pt-4">
 					<Button variant="danger" onClick={onClose}>
 						Batal
 					</Button>
 					<Button variant="info" onClick={handleSubmit}>
-						{isEdit ? "Simpan" : "Kirim"}
+						Kirim
 					</Button>
 				</div>
 			</div>
@@ -705,9 +876,43 @@ function GeneratePasswordModal({ isOpen, onClose, onSubmit, userEmail }) {
 	};
 
 	const handleCopy = () => {
-		navigator.clipboard.writeText(password);
-		setIsCopied(true);
-		setTimeout(() => setIsCopied(false), 2000);
+		if (!password) return;
+
+		const doFallback = () => {
+			const el = document.createElement("textarea");
+			el.value = password;
+			el.setAttribute("readonly", "");
+			el.style.position = "absolute";
+			el.style.left = "-9999px";
+			document.body.appendChild(el);
+			el.select();
+			try {
+				document.execCommand("copy");
+				setIsCopied(true);
+				setTimeout(() => setIsCopied(false), 2000);
+			} catch (err) {
+				console.error("Fallback copy failed:", err);
+			}
+			document.body.removeChild(el);
+		};
+
+		if (
+			navigator.clipboard &&
+			typeof navigator.clipboard.writeText === "function"
+		) {
+			navigator.clipboard
+				.writeText(password)
+				.then(() => {
+					setIsCopied(true);
+					setTimeout(() => setIsCopied(false), 2000);
+				})
+				.catch((err) => {
+					console.warn("Clipboard API failed, using fallback:", err);
+					doFallback();
+				});
+		} else {
+			doFallback();
+		}
 	};
 
 	const handleSubmit = () => {
@@ -748,7 +953,7 @@ function GeneratePasswordModal({ isOpen, onClose, onSubmit, userEmail }) {
 		<Modal isOpen={isOpen} onClose={onClose} title="Generate password">
 			{/* Local Alert Overlay */}
 			{localAlert && (
-				<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+				<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60  p-4 text-center">
 					<Alert
 						variant={localAlert.type}
 						title="Perhatian"
@@ -758,97 +963,85 @@ function GeneratePasswordModal({ isOpen, onClose, onSubmit, userEmail }) {
 				</div>
 			)}
 			<div className="space-y-4">
-				{/* Info / Success Banner */}
-				{isGenerated ? (
-					<div className="bg-blue-100 p-3 rounded-lg flex gap-3 items-start border border-blue-200">
-						<div className="text-blue-600 mt-0.5">
-							<InformationCircleIcon className="w-5 h-5" />
-						</div>
-						<p className="text-sm text-blue-900 font-medium leading-relaxed">
-							Password berhasil di generate, mohon serahkan hasilnya kepada
-							pengguna.
-						</p>
+				{/* Info Banner */}
+				<div className="bg-[#b4bdff] p-3 rounded-md flex gap-3 items-center border-none shadow-sm">
+					<div className="text-white flex-shrink-0">
+						<InformationCircleIcon className="w-6 h-6" />
 					</div>
-				) : (
-					<div className="bg-blue-50 p-3 rounded-lg flex gap-3 items-start border border-blue-100">
-						<div className="text-blue-600 mt-0.5">
-							<InformationCircleIcon className="w-5 h-5" />
-						</div>
-						<p className="text-xs text-blue-900 leading-relaxed">
-							Untuk membuat kata sandi baru, silakan tekan tombol "Generate
-							Password". Setelah kata sandi berhasil dibuat, mohon serahkan
-							hasilnya kepada pengguna.
-						</p>
-					</div>
-				)}
+					<p className="text-[13px] text-white leading-tight font-medium">
+						Untuk membuat kata sandi baru, silakan tekan tombol "Generate
+						Password". Setelah kata sandi berhasil dibuat, mohon serahkan
+						hasilnya kepada pengguna.
+					</p>
+				</div>
 
 				{/* Email */}
 				<div className="space-y-1">
-					<label className="text-sm font-medium text-gray-700">Email</label>
+					<label className="text-sm font-medium text-gray-600">Email</label>
 					<input
 						value={userEmail || ""}
 						disabled
-						className="w-full p-3 border border-gray-300 rounded-xl bg-gray-100 text-gray-500"
+						className="w-full p-2.5 border border-gray-300 rounded-md bg-[#e5e5e5] text-gray-700 outline-none"
 					/>
 				</div>
 
 				{/* Generate Password */}
 				<div className="space-y-1">
-					<label className="text-sm font-medium text-gray-700">
-						{isGenerated ? "Password tergenerate" : "Generate Password"}
+					<label className="text-sm font-medium text-gray-600">
+						Generate Password
 					</label>
-					<div className="flex gap-2">
-						{isGenerated ? (
-							<>
-								<input
-									value={password}
-									readOnly
-									className="w-full p-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-900"
-								/>
-								<Button
-									variant={isCopied ? "success" : "primary"}
-									onClick={handleCopy}
-									className="whitespace-nowrap bg-indigo-500 hover:bg-indigo-700 transition-all duration-200 active:scale-95"
-								>
-									{isCopied ? "Copied!" : "Copy"}
-								</Button>
-							</>
-						) : (
-							<Button
-								variant="primary"
-								onClick={generatePassword}
-								className="w-full bg-brand hover:bg-brand-700"
-							>
-								Generate Password
-							</Button>
-						)}
+					<div className="relative flex items-center">
+						<input
+							type="text"
+							value={password}
+							readOnly
+							className="w-full p-2.5 pr-36 border border-gray-300 rounded-md bg-[#e5e5e5] text-gray-700 font-mono outline-none"
+						/>
+						<button
+							onClick={isGenerated ? handleCopy : generatePassword}
+							className="absolute right-0 top-0 bottom-0 px-4 bg-[#7586ff] text-white rounded-r-md hover:bg-[#6474ff] transition-colors text-sm font-medium min-w-[120px]"
+						>
+							{isGenerated
+								? isCopied
+									? "Copied!"
+									: "Copy"
+								: "Generate Password"}
+						</button>
 					</div>
 				</div>
 
-				{/* Konfirmasi Password */}
+				{/* Confirm Password */}
 				<div className="space-y-1">
-					<label className="text-sm font-medium text-gray-700">
+					<label className="text-sm font-medium text-gray-600">
 						Konfirmasi Password
 					</label>
 					<input
+						type="text"
 						value={confirmPassword}
-						onChange={(e) => {
-							setConfirmPassword(e.target.value);
-							setLocalAlert(null);
-						}}
+						onChange={(e) => setConfirmPassword(e.target.value)}
+						className="w-full p-2.5 border border-gray-300 rounded-md outline-none focus:border-brand-400 placeholder-gray-400 text-gray-700"
 						placeholder="Password..."
-						className="w-full p-3 text-black border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand transition-all"
 					/>
 				</div>
 
-				{/* Buttons */}
-				<div className="flex justify-end gap-3 pt-4">
-					<Button variant="danger" onClick={onClose}>
-						Batal
-					</Button>
-					<Button variant="info" onClick={handleSubmit}>
+				{/* Submit */}
+				<div className="flex justify-end gap-3 pt-2">
+					<button
+						onClick={onClose}
+						className="px-6 py-2 bg-[#ff976a] text-white rounded-md hover:bg-[#ff8550] transition-colors text-sm font-bold"
+					>
+						batal
+					</button>
+					<button
+						onClick={handleSubmit}
+						className={`px-6 py-2 rounded-md transition-colors text-sm font-bold ${
+							password && confirmPassword
+								? "bg-[#7586ff] text-white hover:bg-[#6474ff]"
+								: "bg-[#bdbdbd] text-white cursor-not-allowed"
+						}`}
+					>
 						Lanjut
-					</Button>
+					</button>
 				</div>
 			</div>
 		</Modal>

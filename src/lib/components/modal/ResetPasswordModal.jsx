@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { Modal } from "./Modal";
 import { Button } from "../button/Button";
 import { Input } from "../input/Input";
-import { api } from "../../api";
 import { Alert } from "../alert/Alert";
+import { api } from "../../api";
 import { useAuth } from "../../AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -17,168 +16,154 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess }) {
 		confirmPassword: "",
 	});
 	const [errors, setErrors] = useState({});
-	const [status, setStatus] = useState("idle"); // idle, loading, success, error
-	const [message, setMessage] = useState("");
+	const [status, setStatus] = useState("idle");
 
-	// Reset state when modal opens/closes
 	useEffect(() => {
 		if (isOpen) {
 			setFormData({ oldPassword: "", newPassword: "", confirmPassword: "" });
 			setErrors({});
 			setStatus("idle");
-			setMessage("");
 		}
 	}, [isOpen]);
 
-	const handleChange = (e) => {
-		const { name, value } = e.target;
-		setFormData((prev) => ({ ...prev, [name]: value }));
-		// Clear error for field when typing
-		if (errors[name]) {
-			setErrors((prev) => ({ ...prev, [name]: "" }));
-		}
-	};
-
 	const validate = () => {
 		const newErrors = {};
-
-		// 1. Data tidak lengkap (Empty check)
-		if (!formData.oldPassword)
+		if (!formData.oldPassword) {
 			newErrors.oldPassword = "Password lama wajib diisi";
-		if (!formData.newPassword)
+		}
+		if (!formData.newPassword) {
 			newErrors.newPassword = "Password baru wajib diisi";
-		if (!formData.confirmPassword)
-			newErrors.confirmPassword = "Konfirmasi password wajib diisi";
+		} else if (formData.newPassword.length < 6) {
+			newErrors.newPassword = "Password minimal 6 karakter";
+		}
 
-		// 2. Pass sama dengan yang lama (Logic check)
 		if (
-			formData.newPassword &&
-			formData.oldPassword &&
-			formData.newPassword === formData.oldPassword
+			formData.newPassword === formData.oldPassword &&
+			formData.newPassword !== ""
 		) {
 			newErrors.newPassword =
 				"Password baru tidak boleh sama dengan password lama";
 		}
 
-		// 3. Konfirmasi kecocokan pass baru (gagal) (Logic check)
-		if (
-			formData.newPassword &&
-			formData.confirmPassword &&
-			formData.newPassword !== formData.confirmPassword
-		) {
+		if (formData.newPassword !== formData.confirmPassword) {
 			newErrors.confirmPassword = "Konfirmasi password tidak sesuai";
 		}
-
 		setErrors(newErrors);
 		return Object.keys(newErrors).length === 0;
 	};
 
 	const handleSubmit = async () => {
-		if (validate()) {
-			setStatus("loading");
-			setMessage("");
+		if (!validate()) return;
+
+		setStatus("loading");
+		try {
+			// 1. Kirim perubahan password
+			await api.changePassword(formData);
+
+			// 2. Tandai sebagai bukan user baru lagi di database
 			try {
-				await api.changePassword(formData);
-				setStatus("success");
-				setMessage("Password berhasil diubah! Silakan login kembali.");
-				if (onSuccess) onSuccess();
+				await api.markNewEmployeeAsSeen();
+			} catch (e) {
+				console.error("Gagal update status employee seen:", e);
+			}
 
-				setTimeout(() => {
-					onClose();
-					logout();
-					navigate("/login");
-				}, 1500);
-			} catch (error) {
-				setStatus("idle");
-				const errorMsg =
-					error.response?.data?.message || "Gagal mengubah password";
-				// Fix uncapitalized message from API
-				const formattedMsg =
-					errorMsg === "password lama salah" ? "Password lama salah" : errorMsg;
+			setStatus("success");
 
-				setErrors({
-					oldPassword: formattedMsg,
-				});
+			// 3. Panggil callback onSuccess untuk munculin alert di LoginPage
+			if (onSuccess) onSuccess("Password berhasil dirubah");
+
+			// 4. Jeda 2 detik, lalu logout dan tendang ke login
+			setTimeout(() => {
+				onClose();
+				logout();
+				navigate("/login", { replace: true });
+			}, 2000);
+		} catch (error) {
+			setStatus("idle");
+			const responseData = error.response?.data;
+			const errorMsg = responseData?.message || "Gagal mengubah password";
+
+			// Mapping error dari backend agar lebih user-friendly dan muncul di input yang tepat
+			if (
+				errorMsg.toLowerCase().includes("password lama salah") ||
+				errorMsg.toLowerCase().includes("wrong old password")
+			) {
+				setErrors({ oldPassword: "Password lama salah" });
+			} else {
+				setErrors({ oldPassword: errorMsg });
 			}
 		}
 	};
 
 	return (
-		<>
-			<Modal isOpen={isOpen} onClose={onClose} title="Reset Password">
-				<div className="space-y-4">
-					{status === "loading" && (
-						<div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
-							<Alert
-								variant="loading"
-								title="Menyimpan..."
-								shadow={false}
-								hideButtons
-							/>
-						</div>
-					)}
-
-					<Input
-						label="Password Lama"
-						type="text"
-						name="oldPassword"
-						value={formData.oldPassword}
-						onChange={handleChange}
-						placeholder="Masukkan password lama"
-						error={errors.oldPassword}
-					/>
-
-					<Input
-						label="Password Baru"
-						type="text"
-						name="newPassword"
-						value={formData.newPassword}
-						onChange={handleChange}
-						placeholder="Masukkan password baru"
-						error={errors.newPassword}
-					/>
-
-					<Input
-						label="Konfirmasi Password Baru"
-						type="text"
-						name="confirmPassword"
-						value={formData.confirmPassword}
-						onChange={handleChange}
-						placeholder="Ulangi password baru"
-						error={errors.confirmPassword}
-					/>
-
-					<div className="flex justify-end gap-3 pt-4">
-						<Button
-							variant="danger"
-							onClick={onClose}
-							disabled={status === "loading" || status === "success"}
-						>
-							Batal
-						</Button>
-						<Button
-							variant="info"
-							onClick={handleSubmit}
-							disabled={status === "loading" || status === "success"}
-						>
-							Simpan
-						</Button>
-					</div>
-				</div>
-			</Modal>
-			{status === "success" &&
-				createPortal(
-					<div className="fixed inset-0 z-1000 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+		<Modal isOpen={isOpen} onClose={onClose} title="Ganti password">
+			<div className="space-y-4 relative">
+				{/* Overlay Loading saat proses simpan */}
+				{/* Overlay Loading saat proses simpan */}
+				{status === "loading" && (
+					<div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl transition-all duration-300">
 						<Alert
-							variant="success"
-							title="Berhasil!"
-							message={message}
-							shadow={true}
+							variant="loading"
+							title="Menyimpan..."
+							shadow={false}
 							hideButtons
 						/>
-					</div>,
-					document.body,
+					</div>
 				)}
-		</>
+
+				<Input
+					label="Password Lama"
+					type="password"
+					name="oldPassword"
+					placeholder="Password..."
+					value={formData.oldPassword}
+					onChange={(e) =>
+						setFormData({ ...formData, oldPassword: e.target.value })
+					}
+					error={errors.oldPassword}
+				/>
+
+				<Input
+					label="Password Baru"
+					type="password"
+					name="newPassword"
+					placeholder="Pasword..."
+					value={formData.newPassword}
+					onChange={(e) =>
+						setFormData({ ...formData, newPassword: e.target.value })
+					}
+					error={errors.newPassword}
+				/>
+
+				<Input
+					label="Konfirmasi Password"
+					type="password"
+					name="confirmPassword"
+					placeholder="Pasword..."
+					value={formData.confirmPassword}
+					onChange={(e) =>
+						setFormData({ ...formData, confirmPassword: e.target.value })
+					}
+					error={errors.confirmPassword}
+				/>
+
+				<div className="flex justify-end gap-3 pt-4">
+					<Button
+						variant="danger"
+						onClick={onClose}
+						disabled={status === "loading" || status === "success"}
+					>
+						batal
+					</Button>
+					<Button
+						variant="info"
+						onClick={handleSubmit}
+						disabled={status === "loading" || status === "success"}
+					>
+						Kirim
+					</Button>
+				</div>
+			</div>
+		</Modal>
 	);
 }

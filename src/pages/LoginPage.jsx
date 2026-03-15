@@ -1,52 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
-import { Input, Button, AlertBanner, Alert, Modal } from "../lib/components";
+import { Input } from "../lib/components/input/Input";
+import { Button } from "../lib/components/button/Button";
+import { Alert, AlertBanner } from "../lib/components/alert/Alert";
 import { api } from "../lib/api";
 import logoSvg from "../assets/logo.svg";
 import homeGambar from "../assets/home-gambar.webp";
+
+// Lazy load heavy components
+const ResetPasswordModal = lazy(() =>
+	import("../lib/components/modal/ResetPasswordModal").then((module) => ({
+		default: module.ResetPasswordModal,
+	})),
+);
 import { useAuth } from "../lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { USER_ROLES } from "../lib/constants";
 
 export default function LoginPage() {
 	const [showPassword, setShowPassword] = useState(false);
-	const [formData, setFormData] = useState({
-		email: "",
-		password: "",
-	});
-
+	const [formData, setFormData] = useState({ email: "", password: "" });
 	const [error, setError] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
+
+	// State untuk notifikasi dan modal
 	const [passwordAlert, setPasswordAlert] = useState(null);
+	const [isBlockedAlertOpen, setIsBlockedAlertOpen] = useState(false);
+	const [showNewUserAlert, setShowNewUserAlert] = useState(false);
+	const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+	const [pendingUserData, setPendingUserData] = useState(null);
+	const [failedAttempts, setFailedAttempts] = useState(0);
 
-	// New User States
-	const [isWelcomeAlertOpen, setIsWelcomeAlertOpen] = useState(false);
-	const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] =
-		useState(false);
-	const [newPassword, setNewPassword] = useState("");
-	const [confirmPassword, setConfirmPassword] = useState("");
-	const [oldPassword, setOldPassword] = useState("");
-
-	const { login, updateMe } = useAuth();
+	const { login, setUserData } = useAuth();
 	const navigate = useNavigate();
+
+	// Efek untuk menutup alert otomatis dalam 3 detik
+	useEffect(() => {
+		let timer;
+		if (passwordAlert || isBlockedAlertOpen) {
+			timer = setTimeout(() => {
+				setPasswordAlert(null);
+				setIsBlockedAlertOpen(false);
+			}, 3000);
+		}
+		return () => clearTimeout(timer);
+	}, [passwordAlert, isBlockedAlertOpen]);
 
 	const handleChange = (e) => {
 		const { name, value } = e.target;
-		setFormData((prev) => ({
-			...prev,
-			[name]: value,
-		}));
+		setFormData((prev) => ({ ...prev, [name]: value }));
 		if (error) setError("");
 	};
 
-	const [isBlockedAlertOpen, setIsBlockedAlertOpen] = useState(false);
+	const handleRedirect = (data) => {
+		const user = data.userData || data;
+		if (user.role === USER_ROLES.HR || user.role === USER_ROLES.ADMIN) {
+			navigate("/admin");
+		} else {
+			navigate("/dashboard");
+		}
+	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 
-		if (!formData.email || !formData.password) {
-			setError("Email atau password masih kosong");
+		// Frontend Validation: Min 8 characters
+		if (formData.password.length < 8) {
+			setError("Password minimal 8 karakter.");
 			return;
 		}
 
@@ -55,128 +76,78 @@ export default function LoginPage() {
 
 		try {
 			const data = await login(formData.email, formData.password);
+			console.log("[LoginPage] Raw login response data:", data);
 
-			// Cek apakah user sudah pernah skip/ganti password di browser ini
-			const hasSeenWelcome = localStorage.getItem(`seen_welcome_${data.id}`);
+			// isNewUser sudah dinormalisasi di AuthContext (Boolean)
+			let isNewUser = data.isNewUser === true;
+			console.log("[LoginPage] isNewUser from AuthContext:", isNewUser);
 
-			if (data.isNewUser && !hasSeenWelcome) {
-				setIsWelcomeAlertOpen(true);
-				return;
+			// Tambahkan fallback check profile untuk memastikan data paling aktual
+			try {
+				const profile = await api.getMe();
+				console.log("[LoginPage] Profile from getMe:", profile);
+				if (profile.isNewUser) isNewUser = true;
+			} catch (e) {
+				console.warn("[LoginPage] Gagal getMe fallback:", e);
 			}
 
-			if (data.role === USER_ROLES.HR || data.role === USER_ROLES.ADMIN) {
-				navigate("/admin");
+			console.log("[LoginPage] Final isNewUser decision:", isNewUser);
+
+			if (isNewUser) {
+				// JIKA USER BARU (is_new_employee = 1): Tampilkan prompt ganti password dulu
+				setPendingUserData(data);
+				setShowNewUserAlert(true);
 			} else {
-				navigate("/dashboard");
+				// JIKA USER LAMA (is_new_employee = 0): Langsung redirect
+				handleRedirect(data);
 			}
 		} catch (err) {
-			let errorMsg = err.message || "Terjadi kesalahan saat login";
-			const status = err.response?.status;
+			let errorMsg = err.message || "Terjadi kesalahan";
+			if (err.response?.status === 401) {
+				const newAttempts = failedAttempts + 1;
+				setFailedAttempts(newAttempts);
 
-			if (
-				status === 401 ||
-				errorMsg.includes("401") ||
-				errorMsg.toLowerCase().includes("invalid credentials")
-			) {
-				errorMsg = "Email atau password salah.";
-				setError(errorMsg);
-			} else if (
-				errorMsg.toLowerCase().includes("blokir") ||
-				errorMsg.toLowerCase().includes("locked")
-			) {
+				if (newAttempts >= 3) {
+					setIsBlockedAlertOpen(true);
+					setError("Akun terblokir karena terlalu banyak percobaan.");
+				} else {
+					setError("Email atau password salah.");
+				}
+			} else if (errorMsg.toLowerCase().match(/blokir|locked/)) {
 				setIsBlockedAlertOpen(true);
 			} else {
-				// Show real message from backend if possible, otherwise use the generic 500
-				const detailedMsg =
-					err.response?.data?.message || err.response?.data || errorMsg;
-				setError(detailedMsg);
+				setError(err.response?.data?.message || errorMsg);
 			}
 		} finally {
 			setIsLoading(false);
 		}
 	};
 
-	const handleWelcomeConfirm = () => {
-		setIsWelcomeAlertOpen(false);
-		setIsResetPasswordModalOpen(true);
-	};
-
-	const handleWelcomeCancel = async () => {
-		setIsWelcomeAlertOpen(false);
+	const handlePromptCancel = async () => {
+		setShowNewUserAlert(false);
+		setIsLoading(true);
 		try {
-			// Simpan di localStorage buat backup (supaya user gak keganggu lagi)
-			localStorage.setItem(`seen_welcome_${user?.id}`, "true");
-			updateMe({ isNewUser: false });
-
-			// Coba tembak API (pake POST)
-			await api.updateProfile({ is_new_employee: 0 });
+			// Memastikan status di DB diupdate agar tidak muncul lagi di login berikutnya
+			await api.markNewEmployeeAsSeen();
+			const actualUserData = pendingUserData.userData || pendingUserData;
+			setUserData(actualUserData);
+			handleRedirect(actualUserData);
 		} catch (err) {
-			console.error("API update failed, but status saved locally:", err);
-		}
-		navigate("/dashboard");
-	};
-
-	const handlePasswordChange = async () => {
-		if (newPassword !== confirmPassword) {
-			setPasswordAlert({
-				type: "error",
-				message: "Password konfirmasi tidak cocok!",
-			});
-			return;
-		}
-		if (newPassword.length < 8) {
-			setPasswordAlert({
-				type: "error",
-				message: "Password minimal 8 karakter",
-			});
-			return;
-		}
-
-		try {
-			await api.changePassword({
-				oldPassword,
-				newPassword,
-				confirmPassword,
-			});
-			// Juga update flag is_new_employee via localStorage & API
-			localStorage.setItem(`seen_welcome_${user?.id}`, "true");
-			try {
-				await api.updateProfile({ is_new_employee: 0 });
-			} catch (e) {
-				console.warn("Failed to update flag on server after password change");
-			}
-			updateMe({ isNewUser: false });
-			setPasswordAlert({
-				type: "success",
-				message: "Password berhasil diubah, silakan masuk ke dashboard.",
-				onClose: () => {
-					setPasswordAlert(null);
-					setIsResetPasswordModalOpen(false);
-					navigate("/dashboard");
-				},
-			});
-		} catch (err) {
-			setPasswordAlert({
-				type: "error",
-				message: "Gagal mengubah password: " + err.message,
-			});
+			const actualUserData = pendingUserData.userData || pendingUserData;
+			setUserData(actualUserData);
+			handleRedirect(actualUserData);
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
 	return (
-		<div className="flex min-h-screen w-full overflow-hidden bg-white font-sans">
-			{/* Left Side - Form */}
-			<div className="flex w-full flex-col items-center justify-center px-8 lg:w-1/2 lg:px-16 xl:px-24 relative z-20">
+		<div className="flex min-h-screen w-full bg-white font-sans overflow-hidden">
+			{/* SISI KIRI - FORM LOGIN */}
+			<div className="flex w-full flex-col items-center justify-center px-8 lg:w-1/2 relative z-20">
 				<div className="w-full max-w-md">
 					<div className="mb-8 flex justify-center">
-						<img src={logoSvg} alt="HRIS Logo" className="h-24 w-auto" />
-					</div>
-
-					<div className="mb-8 text-center">
-						<h1 className="mb-2 text-3xl font-bold text-gray-900">
-							Log In to your account
-						</h1>
-						<p className="text-sm text-gray-500">Welcome back</p>
+						<img src={logoSvg} alt="Logo" className="h-24" />
 					</div>
 
 					<form onSubmit={handleSubmit} className="space-y-5">
@@ -189,34 +160,21 @@ export default function LoginPage() {
 							disabled={isLoading}
 						/>
 
-						<div className="relative">
-							<Input
-								type={showPassword ? "text" : "password"}
-								name="password"
-								placeholder="Password"
-								value={formData.password}
-								onChange={handleChange}
-								disabled={isLoading}
-							/>
-							<button
-								type="button"
-								onClick={() => setShowPassword(!showPassword)}
-								className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-							>
-								{showPassword ? (
-									<EyeSlashIcon className="h-5 w-5" />
-								) : (
-									<EyeIcon className="h-5 w-5" />
-								)}
-							</button>
-						</div>
+						<Input
+							type="password"
+							name="password"
+							placeholder="Password"
+							value={formData.password}
+							onChange={handleChange}
+							disabled={isLoading}
+						/>
 
 						{error && <AlertBanner variant="error" message={error} />}
 
 						<Button
 							type="submit"
 							variant="info"
-							className="w-full py-3"
+							className="w-full"
 							disabled={isLoading}
 						>
 							{isLoading ? "Signing in..." : "Login"}
@@ -225,119 +183,72 @@ export default function LoginPage() {
 				</div>
 			</div>
 
-			{/* Right Side - Image */}
-			<div className="hidden lg:flex relative flex-1 items-center justify-end overflow-hidden -ml-1">
+			{/* SISI KANAN - GAMBAR */}
+			<div className="hidden lg:flex flex-1 items-center justify-end">
 				<img
 					src={homeGambar}
-					alt="Office Buildings"
-					className="h-full w-auto object-contain"
+					alt="Side Decoration"
+					className="h-full object-contain"
 				/>
 			</div>
 
-			{/* Welcome Alert Overlay */}
-			{isWelcomeAlertOpen &&
-				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-						<Alert
-							variant="question"
-							title="Selamat datang di HRIS mini, ingin langsung ganti password?"
-							buttonText="Iya"
-							cancelText="Tidak"
-							onConfirm={handleWelcomeConfirm}
-							onCancel={handleWelcomeCancel}
-							btnConfirmVariant="info"
-							btnCancelVariant="danger"
-							className="shadow-2xl"
-						/>
-					</div>,
-					document.body,
-				)}
+			{/* MODAL GANTI PASSWORD */}
+			<Suspense fallback={null}>
+				<ResetPasswordModal
+					isOpen={isResetPasswordOpen}
+					onClose={() => setIsResetPasswordOpen(false)}
+					onSuccess={(msg) =>
+						setPasswordAlert({ type: "success", message: msg })
+					}
+				/>
+			</Suspense>
 
-			{/* Reset Password Modal */}
-			<Modal
-				isOpen={isResetPasswordModalOpen}
-				onClose={() => setIsResetPasswordModalOpen(false)}
-				title="Ganti password"
-			>
-				<div className="space-y-4">
-					<div className="space-y-2">
-						<label className="text-sm font-medium text-gray-600">
-							Password Lama
-						</label>
-						<Input
-							type="password"
-							placeholder="Password..."
-							value={oldPassword}
-							onChange={(e) => setOldPassword(e.target.value)}
-						/>
-					</div>
+			{/* PORTAL UNTUK ALERT OVERLAY */}
 
-					<div className="space-y-2">
-						<label className="text-sm font-medium text-gray-600">
-							Password Baru
-						</label>
-						<Input
-							type="password"
-							placeholder="Password..."
-							value={newPassword}
-							onChange={(e) => setNewPassword(e.target.value)}
-						/>
-					</div>
-
-					<div className="space-y-2">
-						<label className="text-sm font-medium text-gray-600">
-							Konfirmasi Password
-						</label>
-						<Input
-							type="password"
-							placeholder="Password..."
-							value={confirmPassword}
-							onChange={(e) => setConfirmPassword(e.target.value)}
-						/>
-					</div>
-
-					<div className="flex justify-end pt-4 gap-2">
-						<Button
-							variant="danger"
-							onClick={() => navigate("/dashboard")}
-							className="bg-orange-400 hover:bg-orange-500 border-none text-white"
-						>
-							batal
-						</Button>
-						<Button
-							variant="primary"
-							onClick={handlePasswordChange}
-							className="bg-indigo-500 hover:bg-indigo-600 text-white"
-						>
-							Kirim
-						</Button>
-					</div>
-				</div>
-			</Modal>
-
-			{/* Blocked Alert Overlay */}
+			{/* Alert Akun Terblokir */}
 			{isBlockedAlertOpen &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
 						<Alert
 							variant="error"
-							title="Akun anda terblokir, silahkan hubungi admin"
-							buttonText="Tutup"
+							title="Akun Terblokir"
+							message="Hubungi admin untuk membuka akses."
 							onClose={() => setIsBlockedAlertOpen(false)}
+							showCloseIcon={false}
 						/>
 					</div>,
 					document.body,
 				)}
 
-			{/* Password Alert Overlay */}
+			{/* Prompt Penawaran Ganti Password untuk User Baru */}
+			{showNewUserAlert &&
+				createPortal(
+					<div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4">
+						<Alert
+							variant="question"
+							title="Selamat datang di HRIS mini, ingin mengganti pasword?"
+							message="Apakah Anda ingin mengganti password sekarang demi keamanan?"
+							buttonText="Iya"
+							cancelText="Tidak"
+							onConfirm={() => {
+								setShowNewUserAlert(false);
+								setIsResetPasswordOpen(true);
+							}}
+							onCancel={handlePromptCancel}
+						/>
+					</div>,
+					document.body,
+				)}
+
+			{/* Alert Sukses Ganti Password (Muncul Otomatis dari Modal) */}
 			{passwordAlert &&
 				createPortal(
-					<div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+					<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 text-center">
 						<Alert
 							variant={passwordAlert.type}
-							title={passwordAlert.type === "success" ? "Berhasil" : "Gagal"}
 							message={passwordAlert.message}
-							onClose={passwordAlert.onClose || (() => setPasswordAlert(null))}
+							hideButtons
+							hideTitle
 						/>
 					</div>,
 					document.body,

@@ -1,35 +1,49 @@
 import { Button } from "../button/Button";
-import { XMarkIcon } from "@heroicons/react/24/outline";
-import dismissGif from "../../../assets/dismiss.gif";
+import {
+	XMarkIcon,
+	InformationCircleIcon,
+	CheckCircleIcon,
+	ExclamationCircleIcon,
+	QuestionMarkCircleIcon,
+	ArrowPathIcon,
+} from "@heroicons/react/24/outline";
+
+const BASE_STYLES =
+	"flex flex-col items-center justify-center bg-white p-10 rounded-3xl w-[320px] min-h-[320px] mx-auto text-center relative gap-6";
+
 import successGif from "../../../assets/Success.gif";
+import errorGif from "../../../assets/dismiss.gif";
 import questionGif from "../../../assets/question.gif";
 import loadingGif from "../../../assets/loading.gif";
 
-const BASE_STYLES =
-	"flex flex-col items-center bg-white p-6 rounded-3xl w-[300px] min-h-[250px] mx-auto text-center border border-gray-100 justify-center";
-
 const ALERT_VARIANTS = {
 	success: {
-		img: successGif,
-		defaultTitle: "Berhasil!",
+		Icon: successGif,
+		iconColor: "text-success",
+		defaultTitle: "Sukses",
 		defaultBtnText: "Selesai",
 		btnVariant: "primary",
+		hideButtons: true,
 	},
 	error: {
-		img: dismissGif,
+		Icon: errorGif,
+		iconColor: "text-danger",
 		defaultTitle: "Gagal",
 		defaultBtnText: "Tutup",
 		btnVariant: "danger",
+		hideButtons: true,
 	},
 	question: {
-		img: questionGif,
+		Icon: questionGif,
+		iconColor: "text-info",
 		defaultTitle: "Apakah anda yakin?",
 		defaultBtnText: "Ya, Lanjutkan",
 		defaultCancelText: "Batal",
 		btnVariant: "primary",
 	},
 	loading: {
-		img: loadingGif,
+		Icon: loadingGif,
+		iconColor: "text-info",
 		defaultTitle: "Mohon Menunggu...",
 		hideButtons: true,
 	},
@@ -38,7 +52,7 @@ const ALERT_VARIANTS = {
 export function Alert({
 	variant = "error",
 	title,
-	message,
+	mBALIessage,
 	buttonText,
 	onClose,
 	onConfirm,
@@ -49,6 +63,7 @@ export function Alert({
 	className = "",
 	shadow = true,
 	hideButtons = false,
+	showCloseIcon = true,
 	children,
 	...props
 }) {
@@ -60,27 +75,32 @@ export function Alert({
 			className={`${BASE_STYLES} ${shadow ? "shadow-xl" : ""} ${className}`}
 			{...props}
 		>
-			{onClose && variant !== "question" && variant !== "loading" && (
-				<button
-					onClick={onClose}
-					className="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-danger active:scale-95 transition-all duration-200"
-				>
-					<XMarkIcon className="h-6 w-6" />
-				</button>
-			)}
-			<div className="mb-4">
+			{onClose &&
+				showCloseIcon &&
+				variant !== "question" &&
+				variant !== "loading" && (
+					<button
+						onClick={onClose}
+						className="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 hover:bg-gray-100 hover:text-danger active:scale-95 transition-all duration-200"
+					>
+						<XMarkIcon className="h-6 w-6" />
+					</button>
+				)}
+			{/* Icon - Sekarang masuk ke flow flex standar supaya tidak "nabrak" */}
+			<div className="flex items-center justify-center pointer-events-none">
 				<img
-					src={config.img}
-					alt={`Status ${variant}`}
-					className="h-20 w-20 object-contain"
+					src={config.Icon}
+					alt={variant}
+					className="h-28 w-28 object-contain"
 				/>
 			</div>
-			<h2 className="text-xl font-bold text-gray-800 mb-2">
-				{title || config.defaultTitle}
-			</h2>
-			{(message || children) && (
-				<p className="text-gray-600 mb-6 mx-auto">{message || children}</p>
-			)}
+
+			{/* Konten (Title) - Flow standar tanpa margin-top paksaan */}
+			<div className="w-full relative z-10 py-2">
+				<h2 className="text-xl font-bold text-gray-800 leading-tight">
+					{title || config.defaultTitle}
+				</h2>
+			</div>
 			{!shouldHideButtons && (
 				<div className="w-full">
 					{/* LOGIC SPLIT BUTTON */}
@@ -114,6 +134,43 @@ export function Alert({
 					)}
 				</div>
 			)}
+		</div>
+	);
+}
+
+export function AlertBanner({
+	variant = "error",
+	message,
+	className = "",
+	...props
+}) {
+	if (variant === "info") {
+		return (
+			<div
+				className={`flex items-center gap-3 px-4 py-3 bg-info/50 rounded-lg shadow-sm ${className}`}
+				{...props}
+			>
+				<InformationCircleIcon className="w-6 h-6 text-white shrink-0" />
+				<span className="text-sm font-medium leading-relaxed text-white">
+					{message}
+				</span>
+			</div>
+		);
+	}
+
+	const variants = {
+		success: "bg-success-100 text-success-900",
+		error: "bg-danger/10 text-danger border border-danger/20",
+	};
+
+	const variantStyles = variants[variant] || variants.error;
+
+	return (
+		<div
+			className={`w-full p-3 rounded-xl ${variantStyles} ${className}`}
+			{...props}
+		>
+			<p className="text-sm font-medium">{message}</p>
 		</div>
 	);
 }

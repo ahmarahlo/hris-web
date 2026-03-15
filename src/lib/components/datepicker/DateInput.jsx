@@ -8,6 +8,8 @@ export function DateInput({
 	label,
 	placeholder = "dd/mm/yyyy",
 	minDate,
+	highlightedDates = [],
+	disabledDates = [],
 	disabled = false,
 	className = "",
 	hasError = false,
@@ -48,7 +50,7 @@ export function DateInput({
 			)}
 			<div className="relative">
 				<div
-					className={`relative ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+					className={`relative group ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
 					onClick={() => !disabled && setIsOpen(!isOpen)}
 				>
 					<input
@@ -57,22 +59,24 @@ export function DateInput({
 						disabled={disabled}
 						placeholder={placeholder}
 						value={formatDateDisplay(value)}
-						className={`w-full border rounded-lg px-4 py-2 focus:outline-none transition-all ${
+						className={`w-full border rounded-lg px-4 py-2.5 focus:outline-none transition-all duration-300 ${
 							hasError
-								? "border-danger focus:border-danger-700 placeholder-danger-300"
-								: "border-gray-300 focus:border-brand"
-						} ${disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-black cursor-pointer"}`}
+								? "border-danger focus:border-danger-700 placeholder-danger-300 ring-2 ring-danger/5"
+								: "border-gray-200 focus:border-brand focus:ring-4 focus:ring-brand/5"
+						} ${disabled ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-white text-gray-700 cursor-pointer hover:border-brand/40"}`}
 					/>
-					<CalendarDaysIcon className="w-5 h-5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
+					<CalendarDaysIcon className="w-5 h-5 text-gray-400 group-hover:text-brand transition-colors absolute right-3 top-1/2 -translate-y-1/2" />
 				</div>
 
 				{isOpen && !disabled && (
-					<div className="absolute z-50 top-full mt-2 left-0 shadow-xl rounded-lg">
+					<div className="absolute z-100 top-[-20px] left-full ml-4">
 						<DatePicker
 							value={value}
 							onChange={handleDateSelect}
 							onClose={() => setIsOpen(false)}
 							minDate={minDate}
+							highlightedDates={highlightedDates}
+							disabledDates={disabledDates}
 						/>
 					</div>
 				)}

@@ -1,6 +1,5 @@
 export { Button } from "./button/Button.jsx";
-export { Alert } from "./alert/Alert.jsx";
-export { AlertBanner } from "./alert/AlertBanner.jsx";
+export { Alert, AlertBanner } from "./alert/Alert.jsx";
 export { Input } from "./input/Input.jsx";
 export { Table } from "./table/Table.jsx";
 export { SideBar } from "./navigation/SideBar.jsx";
@@ -11,3 +10,8 @@ export { Modal } from "./modal/Modal.jsx";
 export { Layout } from "./layout/Layout.jsx";
 export { Badge } from "./badge/Badge.jsx";
 export { Dropdown } from "./dropdown/Dropdown.jsx";
+export { LocationVerification } from "./attendance/LocationVerification.jsx";
+export { FaceVerification } from "./attendance/FaceVerification.jsx";
+export { ResetPasswordModal } from "./modal/ResetPasswordModal.jsx";
+export { DateInput } from "./datepicker/DateInput.jsx";
+export { DatePicker } from "./datepicker/DatePicker.jsx";

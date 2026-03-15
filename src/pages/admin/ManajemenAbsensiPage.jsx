@@ -1,46 +1,168 @@
-import { useState, useEffect } from "react";
-import { Layout, Table, Alert } from "../../lib/components";
+import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
+import {
+	Layout,
+	Table,
+	Alert,
+	AlertBanner,
+	StatsCard,
+} from "../../lib/components";
 import { FunnelIcon } from "@heroicons/react/24/outline";
+import { LOADING_DELAY, DEPARTMENTS } from "../../lib/constants";
+import { useLoading } from "../../lib/LoadingContext";
 import { api } from "../../lib/api";
-import { LOADING_DELAY } from "../../lib/constants";
 
 export default function ManajemenAbsensiPage() {
 	const [attendanceData, setAttendanceData] = useState([]);
-	const [loading, setLoading] = useState(true);
+	const { showLoading, hideLoading } = useLoading();
+	const [totalCount, setTotalCount] = useState(0);
+	const [stats, setStats] = useState({
+		totalEmployees: 0,
+		presentToday: 0,
+	});
+	const [params, setParams] = useState({
+		page: 1,
+		limit: 5,
+		search: "",
+		department: "",
+		start_date: "",
+		end_date: "",
+	});
+	const [debouncedSearch, setDebouncedSearch] = useState(params.search);
 
 	useEffect(() => {
-		fetchData();
-	}, []);
+		const timer = setTimeout(() => {
+			setDebouncedSearch(params.search);
+		}, 500);
+		return () => clearTimeout(timer);
+	}, [params.search]);
 
-	const fetchData = async () => {
-		setLoading(true);
+	useEffect(() => {
+		fetchData(true);
+	}, [debouncedSearch]);
+
+	useEffect(() => {
+		let ignore = false;
+		const load = async () => {
+			if (ignore) return;
+			await fetchData(false);
+		};
+		load();
+		return () => {
+			ignore = true;
+		};
+	}, [
+		params.page,
+		params.limit,
+		params.department,
+		params.start_date,
+		params.end_date,
+		debouncedSearch,
+	]);
+
+	const fetchData = async (isSearch = false) => {
+		if (!isSearch) showLoading("Memuat Data Absensi...");
 		try {
 			const minDelay = new Promise((resolve) =>
 				setTimeout(resolve, LOADING_DELAY),
 			);
 
-			const [attendance] = await Promise.all([
-				api.getDashboardAttendance(),
+			const [attendance, dashStats] = await Promise.all([
+				api.getDashboardAttendance({
+					...params,
+					limit: 500,
+					search: "",
+				}),
+				api.getDashboardStats().catch(() => ({})),
 				minDelay,
 			]);
 
-			const mapped = (Array.isArray(attendance) ? attendance : []).map(
-				(item, i) => ({
-					no: i + 1,
+			setStats({
+				totalEmployees:
+					dashStats.total_employees ?? dashStats.totalEmployees ?? 0,
+				presentToday:
+					dashStats.employees_present_today ??
+					dashStats.present_today ??
+					dashStats.presentToday ??
+					0,
+			});
+
+			const rawData = Array.isArray(attendance.data) ? attendance.data : [];
+			setTotalCount(attendance.total ?? rawData.length);
+			console.log("[Attendance List Diagnostic]:", {
+				firstItem: rawData[0],
+				keys: rawData[0] ? Object.keys(rawData[0]) : [],
+			});
+
+			const mapped = rawData.map((item, i) => {
+				const clockInTime = item.clock_in || item.clockIn;
+				const clockOutTime = item.clock_out || item.clockOut;
+
+				// Thresholds: In after 08:10 is late, Out before 17:00 is early
+				const isLate = clockInTime && formatTime(clockInTime) > "08.10";
+				const isEarlyOut = clockOutTime && formatTime(clockOutTime) < "17.00";
+
+				return {
+					no: (params.page - 1) * params.limit + (i + 1),
 					name: item.full_name || item.employee_name || item.name || "-",
 					nip: item.nik || item.nip || "-",
 					date: formatDate(item.date || item.created_at),
 					division: item.department || item.division || "-",
-					clockIn: formatTime(item.clock_in || item.clockIn),
-					clockOut: formatTime(item.clock_out || item.clockOut),
-				}),
-			);
+					clockIn: formatTime(clockInTime),
+					clockOut: formatTime(clockOutTime),
+					isLate,
+					isEarlyOut,
+					note:
+						item.note ||
+						item.notes ||
+						item.reason ||
+						item.early_clock_out_reason ||
+						item.alasan ||
+						item.keterangan ||
+						"",
+					_raw: item,
+				};
+			});
 			setAttendanceData(mapped);
 		} catch (error) {
 			console.error("Error fetching attendance:", error);
 		} finally {
-			setLoading(false);
+			hideLoading();
 		}
+	};
+
+	const handleParamsChange = (newParams) => {
+		setParams((prev) => {
+			if (
+				prev.page === newParams.page &&
+				prev.limit === newParams.pageSize &&
+				prev.search === newParams.search
+			)
+				return prev;
+
+			return {
+				...prev,
+				page: newParams.page,
+				limit: newParams.pageSize,
+				search: newParams.search,
+			};
+		});
+	};
+
+	const handleFilterChange = (key, value) => {
+		setParams((prev) => ({
+			...prev,
+			[key]: value,
+			page: 1,
+		}));
+	};
+
+	const handleMultiFilterChange = (updates) => {
+		setParams((prev) => ({
+			...prev,
+			...updates,
+			page: 1,
+		}));
 	};
 
 	const formatDate = (dateStr) => {
@@ -71,7 +193,6 @@ export default function ManajemenAbsensiPage() {
 					})
 					.replace(":", ".");
 			}
-			// Handle HH:mm:ss or HH:mm
 			const parts = timeStr.split(":");
 			if (parts.length >= 2) {
 				return `${parts[0].padStart(2, "0")}.${parts[1].padStart(2, "0")}`;
@@ -92,60 +213,89 @@ export default function ManajemenAbsensiPage() {
 		}
 	};
 
-	const columns = [
-		{ header: "No", accessor: "no", className: "w-16" },
-		{ header: "Nama karyawan", accessor: "name" },
-		{ header: "NIP", accessor: "nip" },
-		{
-			header: (
-				<div className="flex items-center gap-1">
-					Tanggal <FunnelIcon className="w-3 h-3" />
-				</div>
-			),
-			accessor: "date",
-		},
-		{
-			header: (
-				<div className="flex items-center gap-1">
-					Divisi <FunnelIcon className="w-3 h-3" />
-				</div>
-			),
-			accessor: "division",
-		},
-		{
-			header: "Jam Masuk",
-			accessor: "clockIn",
-			render: (row) => (
-				<span className="text-success-600 font-medium">{row.clockIn}</span>
-			),
-		},
-		{
-			header: "Jam Pulang",
-			accessor: "clockOut",
-			render: (row) => (
-				<span
-					className={
-						isEarlyLeave(row.clockOut) ? "text-danger font-medium" : "text-info"
+	const columns = useMemo(
+		() => [
+			{ header: "No", accessor: "no", className: "w-16" },
+			{ header: "Nama karyawan", accessor: "name" },
+			{ header: "NIP", accessor: "nip" },
+			{
+				header: "Tanggal",
+				accessor: "date",
+				filterType: "date",
+			},
+			{
+				header: "Divisi",
+				accessor: "division",
+				filterType: "select",
+				filterOptions: [
+					{ label: "Semua Divisi", value: "" },
+					...DEPARTMENTS.map((dept) => ({ label: dept, value: dept })),
+				],
+			},
+			{
+				header: "Jam Masuk",
+				accessor: "clockIn",
+				render: (row) => (
+					<span className={`${row.isLate ? "text-danger font-medium" : ""}`}>
+						{row.clockIn}
+					</span>
+				),
+			},
+			{
+				header: "Jam Pulang",
+				accessor: "clockOut",
+				render: (row) => (
+					<span
+						className={`${row.isEarlyOut ? "text-danger font-medium" : ""}`}
+					>
+						{row.clockOut}
+					</span>
+				),
+			},
+			{
+				header: "Alasan",
+				accessor: "note",
+				className: "min-w-[180px] max-w-[250px] break-words text-left",
+				render: (row) => {
+					let finalNote = row.note;
+					if (!finalNote && row.isEarlyOut) {
+						finalNote = `Debug: ${JSON.stringify(row._raw)}`;
 					}
-				>
-					{row.clockOut}
-				</span>
-			),
-		},
-	];
+					return (
+						<span
+							className={
+								finalNote ? "text-danger italic text-xs" : "text-gray-400"
+							}
+						>
+							{finalNote || "-"}
+						</span>
+					);
+				},
+			},
+		],
+		[],
+	);
 
 	return (
 		<Layout activeMenu="Manajemen absensi" title="Manajemen absensi">
-			<div className="p-8 space-y-8 w-full">
-				{loading && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-						<Alert
-							variant="loading"
-							title="Memuat Data Absensi..."
-							shadow={true}
-						/>
-					</div>
-				)}
+			<div className="lg:p-8 p-4 space-y-8 w-full">
+				<AlertBanner
+					variant="info"
+					message="Data absensi user dalam 1 bulan terakhir"
+				/>
+
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+					<StatsCard
+						title="Total karyawan"
+						value={String(stats.totalEmployees)}
+						variant="info"
+					/>
+					<StatsCard
+						title="Karyawan masuk hari ini"
+						value={String(stats.presentToday)}
+						variant="info"
+					/>
+				</div>
 
 				<div className="space-y-4">
 					<div className="flex justify-start">
@@ -154,7 +304,20 @@ export default function ManajemenAbsensiPage() {
 						</h3>
 					</div>
 					<div>
-						<Table columns={columns} data={attendanceData} />
+						<Table
+							columns={columns}
+							data={attendanceData}
+							manual={false} // Full Hybrid: instant client filters
+							maxheight="620px"
+							totalCount={attendanceData.length}
+							pageSize={5}
+							search={params.search}
+							onFilterChange={(accessor, value) => {
+								if (accessor === "division") {
+									handleFilterChange("department", value);
+								}
+							}}
+						/>
 					</div>
 				</div>
 			</div>

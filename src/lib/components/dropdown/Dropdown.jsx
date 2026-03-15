@@ -37,10 +37,11 @@ export function Dropdown({
 			{/* MENU BODY */}
 			{isOpen && (
 				<div
+					onClick={(e) => e.stopPropagation()}
 					className={`absolute z-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden ${activeMenuClass}`}
 				>
 					{children ? (
-						<div className="p-2">{children}</div>
+						<div className="p-3">{children}</div>
 					) : (
 						/* ISI MENU */
 						<ul>

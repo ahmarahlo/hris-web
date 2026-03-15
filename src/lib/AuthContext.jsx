@@ -40,17 +40,40 @@ export const AuthProvider = ({ children }) => {
 		// Gunakan data langsung dari response login (seperti di screenshot Swagger)
 		let userRole = responseData.role || "employee";
 
-		const userData = {
-			id: responseData.id || responseData.user_id,
-			name: responseData.full_name || responseData.name || "User",
-			role: userRole,
-			isNewUser:
-				responseData.is_new_employee === true ||
-				responseData.is_new_employee === 1 ||
-				responseData.is_new_user === true ||
-				responseData.isNewUser === true ||
-				false,
+		// Helper untuk deteksi isNewUser secara mendalam (handling nested data)
+		const detectIsNewUser = (data) => {
+			if (!data) return false;
+
+			// Cek key umum di level top
+			const keys = ["is_new_employee", "is_new_user", "isNewUser", "is_new"];
+			for (const key of keys) {
+				if (data[key] === true || Number(data[key]) === 1) return true;
+			}
+
+			// Cek nested 'user' atau 'employee' object
+			const nested = data.user || data.employee || data.profile;
+			if (nested && typeof nested === "object") {
+				for (const key of keys) {
+					if (nested[key] === true || Number(nested[key]) === 1) return true;
+				}
+			}
+
+			return false;
 		};
+
+		const userData = {
+			id: responseData.id || responseData.user_id || responseData.user?.id,
+			name:
+				responseData.full_name ||
+				responseData.name ||
+				responseData.user?.name ||
+				"User",
+			role: userRole,
+			isNewUser: detectIsNewUser(responseData),
+		};
+
+		console.log("[Auth] Raw response data:", responseData);
+		console.log("[Auth] Calculated userData:", userData);
 
 		console.log("[Auth] Final user data:", userData);
 		localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
@@ -72,6 +95,13 @@ export const AuthProvider = ({ children }) => {
 		setUser(updatedUser);
 	};
 
+	/** Alias untuk menyetel user data secara langsung (tanpa merge). */
+	const setUserData = (data) => {
+		const newUser = { ...user, ...data };
+		localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
+		setUser(newUser);
+	};
+
 	return (
 		<AuthContext.Provider
 			value={{
@@ -80,6 +110,7 @@ export const AuthProvider = ({ children }) => {
 				login,
 				logout,
 				updateMe,
+				setUserData,
 				loading,
 				isAuthenticated: !!token,
 			}}
