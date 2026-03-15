@@ -4,7 +4,7 @@ import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Input, Button, AlertBanner, Alert, Modal } from "../lib/components";
 import { api } from "../lib/api";
 import logoSvg from "../assets/logo.svg";
-import homeGambar from "../assets/home-gambar.svg";
+import homeGambar from "../assets/home-gambar.webp";
 import { useAuth } from "../lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { USER_ROLES } from "../lib/constants";
