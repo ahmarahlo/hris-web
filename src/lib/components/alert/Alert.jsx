@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 const BASE_STYLES =
-	"flex flex-col items-center justify-center bg-white p-10 rounded-3xl w-[320px] min-h-[320px] mx-auto text-center relative gap-6";
+	"flex flex-col items-center justify-center bg-white p-8 rounded-3xl w-[420px] min-h-[auto] mx-auto text-center relative gap-4";
 
 import successGif from "../../../assets/Success.gif";
 import errorGif from "../../../assets/dismiss.gif";
@@ -52,7 +52,7 @@ const ALERT_VARIANTS = {
 export function Alert({
 	variant = "error",
 	title,
-	mBALIessage,
+	message,
 	buttonText,
 	onClose,
 	onConfirm,
@@ -96,10 +96,15 @@ export function Alert({
 			</div>
 
 			{/* Konten (Title) - Flow standar tanpa margin-top paksaan */}
-			<div className="w-full relative z-10 py-2">
+			<div className="w-full relative z-10 py-2 space-y-2">
 				<h2 className="text-xl font-bold text-gray-800 leading-tight">
 					{title || config.defaultTitle}
 				</h2>
+				{message && (
+					<p className="text-sm font-medium text-gray-600">
+						{message}
+					</p>
+				)}
 			</div>
 			{!shouldHideButtons && (
 				<div className="w-full">

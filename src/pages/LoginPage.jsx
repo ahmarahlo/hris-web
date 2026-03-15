@@ -123,29 +123,29 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen w-full bg-slate-50 font-sans overflow-hidden">
-            {/* SISI KIRI - FORM LOGIN (Pake Card Style) */}
-            <div className="flex w-full flex-col items-center justify-center px-6 lg:w-1/2 relative z-20">
-                <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100">
-                    <div className="mb-10 flex justify-center">
-                        <img src={logoSvg} alt="Logo" className="h-16" />
+        <div className="flex min-h-screen w-full bg-white font-sans overflow-hidden">
+            {/* SISI KIRI - FORM LOGIN */}
+            <div className="flex w-full flex-col items-center justify-center px-8 lg:px-16 lg:w-1/2 relative z-20">
+                <div className="w-full max-w-sm mx-auto">
+                    <div className="mb-8 flex justify-center">
+                        <img src={logoSvg} alt="Logo" className="h-[120px] w-auto" />
                     </div>
 
-                    <div className="mb-8 text-center">
-                        <h1 className="text-2xl font-bold text-gray-800">Selamat Datang</h1>
-                        <p className="text-gray-500 mt-2">Silakan masuk ke akun HRIS Anda</p>
+                    <div className="mb-10 text-center">
+                        <h1 className="text-[2rem] font-bold text-gray-900 tracking-tight">Log In to your account</h1>
+                        <p className="text-gray-900 mt-2 text-sm font-medium">Welcome back</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             <Input
                                 type="email"
                                 name="email"
-                                placeholder="Email Perusahaan"
+                                placeholder="Email"
                                 value={formData.email}
                                 onChange={handleChange}
                                 disabled={isLoading}
-                                className="bg-gray-50 border-gray-200 focus:bg-white transition-all"
+                                className="bg-white border-gray-400 focus:bg-white focus:border-blue-500 transition-all text-sm py-3 rounded-md placeholder-gray-500"
                             />
 
                             <Input
@@ -155,31 +155,32 @@ export default function LoginPage() {
                                 value={formData.password}
                                 onChange={handleChange}
                                 disabled={isLoading}
-                                className="bg-gray-50 border-gray-200 focus:bg-white transition-all"
+                                className="bg-white border-gray-400 focus:bg-white focus:border-blue-500 transition-all text-sm py-3 rounded-md placeholder-gray-500"
                             />
                         </div>
 
                         {error && <AlertBanner variant="error" message={error} />}
 
-                        <Button
-                            type="submit"
-                            variant="info"
-                            className="w-full py-3 font-semibold shadow-lg shadow-blue-200"
-                            disabled={isLoading}
-                        >
-                            {isLoading ? "Memproses..." : "Masuk Sekarang"}
-                        </Button>
+                        <div className="pt-2">
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                className="w-full py-3 text-sm font-semibold shadow-none bg-info hover:bg-info-600 text-white transition-all rounded-md"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? "Memproses..." : "Login"}
+                            </Button>
+                        </div>
                     </form>
                 </div>
             </div>
 
-            {/* SISI KANAN - GAMBAR (Biar Gak Mentok) */}
-            <div className="hidden lg:flex flex-1 items-center justify-center bg-blue-600 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-600/80 to-indigo-900/90 z-10" />
+            {/* SISI KANAN - GAMBAR (Bawaan Foto) */}
+            <div className="hidden lg:flex flex-1 relative overflow-hidden bg-white justify-end">
                 <img
                     src={homeGambar}
                     alt="Side Decoration"
-                    className="h-full w-full object-cover relative z-0"
+                    className="h-full w-auto object-contain object-right"
                 />
             </div>
 
