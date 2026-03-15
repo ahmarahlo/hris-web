@@ -38,7 +38,7 @@ Buat file baru bernama `.env` di folder root, lalu masukkan konfigurasi berikut:
 
 ```env
 VITE_API_URL=/api
-VITE_API_KEY=hris-api-key-123
+VITE_API_KEY=
 ```
 
 ### 5. Menjalankan Aplikasi

@@ -8,8 +8,7 @@ export const API_CONFIG = {
 
 export const LOADING_DELAY = 500; // Durasi minimal loading dalam ms
 
-export const API_KEY = "hris-api-key-123";
-
+export const API_KEY = import.meta.env.VITE_API_KEY || "fallback-kunci-lokal";
 export const ENDPOINTS = {
 	AUTH: {
 		LOGIN: "/auth/login",
